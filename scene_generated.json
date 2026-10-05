@@ -1,0 +1,101 @@
+{
+    "room": {
+        "type": "living_room",
+        "size": "large",
+        "width": 6.0,
+        "length": 5.0,
+        "height": 3.2
+    },
+    "style": "modern",
+    "prompt": "Create a large modern living room with a grey sofa and daylight",
+    "materials": {
+        "wall": "#E8DED0",
+        "floor": "#8B5E3C",
+        "ceiling": "#F5F5F5",
+        "sofa": "#808080",
+        "wood": "#6B4226",
+        "black": "#111111"
+    },
+    "assets": [
+        {
+            "asset": "Sofa_Modern",
+            "position": [
+                0.0,
+                0.9375,
+                0
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "scale": [
+                1.12,
+                1.12,
+                1.12
+            ]
+        },
+        {
+            "asset": "TVUnit_Wood",
+            "position": [
+                0.0,
+                -1.875,
+                0
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "scale": [
+                1.12,
+                1.12,
+                1.12
+            ]
+        },
+        {
+            "asset": "CoffeeTable_Modern",
+            "position": [
+                0.0,
+                -0.9375,
+                0
+            ],
+            "rotation": [
+                0,
+                0,
+                0
+            ],
+            "scale": [
+                1.12,
+                1.12,
+                1.12
+            ]
+        }
+    ],
+    "lighting": {
+        "type": "daylight",
+        "brightness": 1.5
+    },
+    "camera": {
+        "position": [
+            4.2,
+            -4.2,
+            2.5
+        ],
+        "target": [
+            0,
+            0,
+            1.1
+        ]
+    },
+    "validation": {
+        "valid": true,
+        "adjustments": [],
+        "warnings": [],
+        "layout_score": 100.0,
+        "layout_variation": 0,
+        "layout_valid": true,
+        "layout_reasons": [],
+        "candidates_tested": 5
+    }
+}

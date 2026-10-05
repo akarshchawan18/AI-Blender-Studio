@@ -1,0 +1,51 @@
+{
+    "room": {
+        "width": 4.572,
+        "length": 3.658,
+        "height": 3.048
+    },
+
+    "style": "modern",
+
+    "materials": {
+        "wall": "#E8DED0",
+        "floor": "#8B5E3C",
+        "ceiling": "#F5F5F5",
+        "sofa": "#C8B39A",
+        "wood": "#6B4226",
+        "black": "#111111"
+    },
+
+    "assets": [
+        {
+            "asset": "Sofa_Modern",
+            "position": [0, 0.5, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+        },
+
+        {
+            "asset": "CoffeeTable_Modern",
+            "position": [0, -0.7, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+        },
+
+        {
+            "asset": "TVUnit_Wood",
+            "position": [0, -1.4, 0],
+            "rotation": [0, 0, 0],
+            "scale": [1, 1, 1]
+        }
+    ],
+
+    "lighting": {
+        "type": "warm",
+        "brightness": 1.0
+    },
+
+    "camera": {
+        "position": [4.2, -4.2, 2.5],
+        "target": [0, 0, 1.1]
+    }
+}
