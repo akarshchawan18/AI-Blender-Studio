@@ -1,0 +1,11 @@
+﻿.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.blend1
+*.blend2
+renders/
+projects/
+*.log
+.vscode/
+.idea/
