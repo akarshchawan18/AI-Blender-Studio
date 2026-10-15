@@ -944,6 +944,24 @@ async def generate_from_image(file: UploadFile = File(...)):
             status_code=422,
             detail="Layout optimizer returned no furniture assets."
         )
+    # Fix living-room chair placement
+    if room_type == "living_room":
+        chair = next(
+            (a for a in assets if a.get("asset") == "Chair_Modern"),
+            None
+        )
+
+        coffee_table = next(
+            (a for a in assets if a.get("asset") == "CoffeeTable_Modern"),
+            None
+        )
+
+        if chair and coffee_table:
+            chair["position"] = [
+                room_width * 0.34,
+                0.0,
+                0.0
+            ]
 
 
     # 11. Build scene data in Blender-compatible format
@@ -967,7 +985,7 @@ async def generate_from_image(file: UploadFile = File(...)):
         },
         "lighting": {
             "type": design_intent.get("lighting", "warm"),
-            "brightness": 1.0,
+            "brightness": 0.40,
         },
 
         "camera": {
@@ -1258,16 +1276,52 @@ async def generate_from_image(file: UploadFile = File(...)):
 def generate_kitchen(request: GenerateRequest):
     prompt = request.prompt.strip().lower()
 
+    # Choose cabinet finish.
+    cabinet_finish = "matte"
+
+    if "glossy" in prompt or "high gloss" in prompt:
+        cabinet_finish = "glossy"
+    elif "wood grain" in prompt or "wood-grain" in prompt:
+        cabinet_finish = "wood"
+    elif "matte" in prompt:
+        cabinet_finish = "matte"
+
     if not prompt:
         raise HTTPException(
             status_code=400,
             detail="Prompt cannot be empty.",
         )
 
+
     # Choose cabinet color.
     cabinet_color = [0.86, 0.84, 0.78]
-    counter_color = [0.055, 0.06, 0.065]
-    lighting_tone = "warm"
+
+    cabinet_colors = {
+        "black": [0.045, 0.045, 0.05],
+        "white": [0.92, 0.92, 0.88],
+        "green": [0.20, 0.32, 0.22],
+        "blue": [0.10, 0.22, 0.38],
+        "beige": [0.72, 0.60, 0.43],
+        "grey": [0.32, 0.33, 0.34],
+        "gray": [0.32, 0.33, 0.34],
+        "navy": [0.035, 0.075, 0.16],
+        "brown": [0.22, 0.10, 0.045],
+        "cream": [0.86, 0.79, 0.65],
+        "red": [0.40, 0.045, 0.035],
+        "yellow": [0.75, 0.55, 0.12],
+    }
+
+
+
+    import re
+
+    for color_name, color_value in cabinet_colors.items():
+        pattern = rf"\b{re.escape(color_name)}\b\s+(?:(?:glossy|matte|high-gloss|wood-grain)\s+)*cabinets?\b"
+        if re.search(pattern, prompt):
+            cabinet_color = color_value
+            break
+
+    # Choose kitchen style.
     kitchen_style = "modern"
 
     if "luxury" in prompt:
@@ -1277,43 +1331,60 @@ def generate_kitchen(request: GenerateRequest):
     elif "minimalist" in prompt:
         kitchen_style = "minimalist"
 
-    if "black cabinet" in prompt or "black cabinets" in prompt:
-        cabinet_color = [0.045, 0.045, 0.05]
-    elif "white cabinet" in prompt or "white cabinets" in prompt:
-        cabinet_color = [0.92, 0.92, 0.88]
-    elif "green cabinet" in prompt or "green cabinets" in prompt:
-        cabinet_color = [0.20, 0.32, 0.22]
-    elif "blue cabinet" in prompt or "blue cabinets" in prompt:
-        cabinet_color = [0.10, 0.22, 0.38]
-    elif "beige cabinet" in prompt or "beige cabinets" in prompt:
-        cabinet_color = [0.72, 0.60, 0.43]
 
-    # Choose countertop color.
-    if (
-        "white countertop" in prompt
-        or "white counter" in prompt
-        or "white quartz" in prompt
-    ):
-        counter_color = [0.82, 0.80, 0.75]
-    elif (
-        "black countertop" in prompt
-        or "black counter" in prompt
-        or "black quartz" in prompt
-    ):
-        counter_color = [0.025, 0.028, 0.032]
-    elif (
-        "grey countertop" in prompt
-        or "gray countertop" in prompt
-        or "grey quartz" in prompt
-        or "gray quartz" in prompt
-    ):
-        counter_color = [0.25, 0.26, 0.27]
+
+     # Choose countertop color.
+    counter_color = [0.055, 0.06, 0.065]
+
+    countertop_colors = {
+        "white": [0.82, 0.80, 0.75],
+        "black": [0.025, 0.028, 0.032],
+        "grey": [0.25, 0.26, 0.27],
+        "gray": [0.25, 0.26, 0.27],
+        "beige": [0.72, 0.62, 0.48],
+        "cream": [0.86, 0.82, 0.72],
+        "brown": [0.24, 0.13, 0.07],
+        "green": [0.12, 0.28, 0.18],
+        "blue": [0.10, 0.20, 0.32],
+        "gold": [0.55, 0.36, 0.10],
+        "marble": [0.82, 0.80, 0.75],
+        "quartz": [0.78, 0.78, 0.75],
+    }
+
+    countertop_keywords = (
+        "countertop",
+        "counter",
+        "quartz",
+        "marble countertop",
+    )
+
+    for color_name, color_value in countertop_colors.items():
+        if any(
+            f"{color_name} {keyword}" in prompt
+            for keyword in countertop_keywords
+        ):
+            counter_color = color_value
+            break
+
+
+
 
     # Choose lighting preference.
-    if "cool lighting" in prompt or "cool light" in prompt:
-        lighting_tone = "cool"
-    elif "neutral lighting" in prompt or "neutral light" in prompt:
-        lighting_tone = "neutral"
+    lighting_tone = "warm"
+
+    lighting_options = {
+        "warm": ["warm lighting", "warm light", "warm lights"],
+        "cool": ["cool lighting", "cool light", "cool lights"],
+        "neutral": ["neutral lighting", "neutral light", "neutral lights"],
+        "natural": ["natural lighting", "natural light", "daylight"],
+        "bright": ["bright lighting", "bright light", "bright lights"],
+        "dim": ["dim lighting", "dim light", "soft lighting"],
+    }
+
+    for tone, keywords in lighting_options.items():
+        if any(keyword in prompt for keyword in keywords):
+            lighting_tone = tone
+            break
 
     # Save settings for Blender.
     config_file = os.path.join(
@@ -1332,6 +1403,7 @@ def generate_kitchen(request: GenerateRequest):
                 "counter_color": counter_color,
                 "lighting_tone": lighting_tone,
                 "style": kitchen_style,
+                "cabinet_finish": cabinet_finish,
             },
             file,
             indent=4,

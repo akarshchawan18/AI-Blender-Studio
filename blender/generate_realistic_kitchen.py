@@ -16,11 +16,13 @@ CABINET_COLOR = (0.075, 0.19, 0.15)
 COUNTER_COLOR = (0.80, 0.77, 0.70)
 LIGHTING_TONE = "warm"
 KITCHEN_STYLE = "modern"
+CABINET_FINISH = "matte"
 
 
 def load_kitchen_config():
     global CABINET_COLOR, COUNTER_COLOR
     global LIGHTING_TONE, KITCHEN_STYLE
+    global CABINET_FINISH
 
     if not os.path.isfile(CONFIG_FILE):
         print("WARNING: Kitchen config not found:", CONFIG_FILE)
@@ -44,8 +46,22 @@ def load_kitchen_config():
         settings.get("counter_color"), COUNTER_COLOR
     )
 
+    finish = str(
+        settings.get("cabinet_finish", "matte")
+    ).strip().lower()
+
+    CABINET_FINISH = (
+        finish
+        if finish in ("matte", "glossy", "wood")
+        else "matte"
+    )
+
     tone = str(settings.get("lighting_tone", "warm")).lower()
-    LIGHTING_TONE = tone if tone in ("warm", "cool", "neutral") else "warm"
+    LIGHTING_TONE = (
+        tone
+        if tone in ("warm", "cool", "neutral", "natural", "bright", "dim")
+        else "warm"
+    )
 
     style = str(settings.get("style", "modern")).lower()
     KITCHEN_STYLE = (
@@ -59,6 +75,7 @@ def load_kitchen_config():
     print("Cabinet:", CABINET_COLOR)
     print("Countertop:", COUNTER_COLOR)
     print("Lighting:", LIGHTING_TONE)
+    print("Cabinet finish:", CABINET_FINISH)
 
 
 load_kitchen_config()
@@ -221,11 +238,21 @@ else:
     FLOOR_COLOR = (0.38, 0.33, 0.27)
 
 
+
+# Apply the requested cabinet finish.
+cabinet_roughness = {
+    "matte": 0.75,
+    "glossy": 0.12,
+    "wood": 0.38,
+}.get(CABINET_FINISH, 0.75)
+
+cabinet_texture = "wood" if CABINET_FINISH == "wood" else "plain"
+
 ivory = mat(
     "Custom Cabinet Finish",
     CABINET_COLOR,
-    0.26,
-    texture="plain"
+    cabinet_roughness,
+    texture=cabinet_texture
 )
 
 wood = mat(

@@ -223,43 +223,69 @@ def create_material(
     roughness=0.5,
     metallic=0.0
 ):
-
-    material = bpy.data.materials.get(
-        name
-    )
+    material = bpy.data.materials.get(name)
 
     if material is None:
-
-        material = bpy.data.materials.new(
-            name=name
-        )
+        material = bpy.data.materials.new(name=name)
 
     material.use_nodes = True
-
     nodes = material.node_tree.nodes
-
-    principled = nodes.get(
-        "Principled BSDF"
-    )
+    links = material.node_tree.links
+    principled = nodes.get("Principled BSDF")
 
     if principled:
+        principled.inputs["Base Color"].default_value = hex_to_rgba(hex_color)
+        principled.inputs["Roughness"].default_value = roughness
+        principled.inputs["Metallic"].default_value = metallic
 
-        principled.inputs[
-            "Base Color"
-        ].default_value = hex_to_rgba(
-            hex_color
-        )
+        # Add procedural surface detail only to wood and countertop.
+        if name in ("Kitchen_Wood_Accent", "Kitchen_Black_Countertop"):
+            texcoord = nodes.new("ShaderNodeTexCoord")
+            texcoord.location = (-700, 100)
 
-        principled.inputs[
-            "Roughness"
-        ].default_value = roughness
+            mapping = nodes.new("ShaderNodeMapping")
+            mapping.location = (-500, 100)
+            links.new(texcoord.outputs["Generated"], mapping.inputs["Vector"])
 
-        principled.inputs[
-            "Metallic"
-        ].default_value = metallic
+            noise = nodes.new("ShaderNodeTexNoise")
+            noise.location = (-280, 100)
+            noise.inputs["Detail"].default_value = 3.0
+            noise.inputs["Roughness"].default_value = 0.7
+
+            ramp = nodes.new("ShaderNodeValToRGB")
+            ramp.location = (-40, 160)
+
+            bump = nodes.new("ShaderNodeBump")
+            bump.location = (180, -100)
+
+            if name == "Kitchen_Wood_Accent":
+                # Elongated noise creates a subtle wood-grain effect.
+                mapping.inputs["Scale"].default_value = (2.0, 2.0, 18.0)
+                noise.inputs["Scale"].default_value = 3.0
+                ramp.color_ramp.elements[0].position = 0.22
+                ramp.color_ramp.elements[0].color = (0.16, 0.055, 0.022, 1.0)
+                ramp.color_ramp.elements[1].position = 0.78
+                ramp.color_ramp.elements[1].color = (0.48, 0.24, 0.10, 1.0)
+                bump.inputs["Strength"].default_value = 0.12
+                bump.inputs["Distance"].default_value = 0.025
+            else:
+                # Fine, low-contrast variation for a dark stone-like surface.
+                mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                noise.inputs["Scale"].default_value = 28.0
+                ramp.color_ramp.elements[0].position = 0.25
+                ramp.color_ramp.elements[0].color = (0.012, 0.012, 0.012, 1.0)
+                ramp.color_ramp.elements[1].position = 0.78
+                ramp.color_ramp.elements[1].color = (0.055, 0.055, 0.055, 1.0)
+                bump.inputs["Strength"].default_value = 0.07
+                bump.inputs["Distance"].default_value = 0.008
+
+            links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
+            links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
+            links.new(ramp.outputs["Color"], principled.inputs["Base Color"])
+            links.new(noise.outputs["Fac"], bump.inputs["Height"])
+            links.new(bump.outputs["Normal"], principled.inputs["Normal"])
 
     return material
-
 
 materials_data = scene_data.get(
     "materials",
@@ -356,23 +382,37 @@ def create_box(
     scale,
     material=None
 ):
-
-    bpy.ops.mesh.primitive_cube_add(
-        location=location
-    )
-
+    bpy.ops.mesh.primitive_cube_add(location=location)
     obj = bpy.context.object
-
     obj.name = name
-
     obj.scale = scale
 
     if material:
-
         assign_material(
             obj,
             material
         )
+
+    # Add subtle bevels to the main kitchen furniture.
+    bevel_targets = (
+        "Kitchen_Lower_Cabinets",
+        "Kitchen_Black_Countertop",
+        "Kitchen_Wood_Backsplash",
+        "Kitchen_Upper_Cabinets",
+        "Kitchen_Refrigerator",
+    )
+
+    if (
+        name in bevel_targets
+        or name.startswith("Kitchen_Cabinet_Door_")
+    ):
+        bevel = obj.modifiers.new(
+            name="Subtle_Edge_Bevel",
+            type="BEVEL"
+        )
+        bevel.width = 0.015
+        bevel.segments = 3
+        bevel.limit_method = "ANGLE"
 
     return obj
 
@@ -486,6 +526,177 @@ create_box(
 
 
 print("Room created.")
+
+# =========================================================
+# OPEN ROOM VIEW — KEEP FLOOR AND THREE WALLS
+# =========================================================
+# =========================================================
+# OPEN ROOM VIEW — CAMERA-FRIENDLY RENDER
+# =========================================================
+
+# Remove the ceiling for an open interior view.
+ceiling = bpy.data.objects.get("AI_Ceiling")
+if ceiling:
+    bpy.data.objects.remove(ceiling, do_unlink=True)
+
+
+print("Open room created for interior viewing.")
+print("Side walls visible in viewport and final render.")
+
+# =========================================================
+# PROCEDURAL KITCHEN FURNITURE
+# =========================================================
+
+room_type = str(
+    scene_data.get("room_type", room.get("type", "living_room"))
+).lower()
+
+if room_type == "kitchen":
+    print("Creating procedural kitchen...")
+
+
+    # Matte white cabinet finish
+    white_mat = create_material(
+        "Kitchen_White_Cabinets",
+        "#F5F5F2",
+        roughness=0.42
+    )
+
+    # Natural medium-brown wood
+    wood_mat = create_material(
+        "Kitchen_Wood_Accent",
+        "#8B5E3C",
+        roughness=0.58
+    )
+
+    # Dark countertop with a subtle sheen
+    black_mat = create_material(
+        "Kitchen_Black_Countertop",
+        "#202020",
+        roughness=0.32
+    )
+
+    # Brushed-metal appearance
+    metal_mat = create_material(
+        "Kitchen_Metal",
+        "#A8ADB2",
+        roughness=0.38,
+        metallic=0.55
+    )
+
+    # Kitchen runs along the back wall.
+    counter_x = -0.05
+    counter_y = LENGTH / 2 - 0.42
+    counter_depth = min(0.62, LENGTH * 0.22)
+    counter_height = min(0.90, HEIGHT * 0.32)
+    cabinet_width = WIDTH * 0.68
+    top_thickness = 0.055
+
+    # Lower cabinets
+    create_box(
+        "Kitchen_Lower_Cabinets",
+        (counter_x, counter_y, counter_height / 2),
+        (cabinet_width / 2, counter_depth / 2, counter_height / 2),
+        white_mat
+    )
+
+    # Black countertop
+    create_box(
+        "Kitchen_Black_Countertop",
+        (counter_x, counter_y, counter_height + top_thickness / 2),
+        (cabinet_width / 2 + 0.04, counter_depth / 2 + 0.04,
+         top_thickness / 2),
+        black_mat
+    )
+
+    # Individual cabinet fronts
+    door_count = 4
+    door_width = cabinet_width / door_count
+
+    for i in range(door_count):
+        door_x = counter_x - cabinet_width / 2 + door_width * (i + 0.5)
+        create_box(
+            f"Kitchen_Cabinet_Door_{i + 1}",
+            (door_x, counter_y - counter_depth / 2 - 0.015,
+             counter_height * 0.52),
+            (door_width * 0.44, 0.018, counter_height * 0.40),
+            white_mat
+        )
+
+    # Wooden backsplash
+    backsplash_height = min(0.42, HEIGHT * 0.16)
+    create_box(
+        "Kitchen_Wood_Backsplash",
+        (counter_x, counter_y + counter_depth / 2 + 0.015,
+         counter_height + backsplash_height / 2),
+        (cabinet_width / 2, 0.025, backsplash_height / 2),
+        wood_mat
+    )
+
+    # Upper cabinets
+    upper_height = min(0.68, HEIGHT * 0.23)
+    upper_z = min(HEIGHT * 0.70, counter_height + backsplash_height + upper_height / 2 + 0.12)
+
+    create_box(
+        "Kitchen_Upper_Cabinets",
+        (counter_x, counter_y + 0.10, upper_z),
+        (cabinet_width * 0.40, 0.20, upper_height / 2),
+        white_mat
+    )
+
+    # Sink
+    sink_x = counter_x - cabinet_width * 0.22
+    create_box(
+        "Kitchen_Sink",
+        (sink_x, counter_y - 0.04,
+         counter_height + top_thickness + 0.012),
+        (0.22, 0.15, 0.018),
+        metal_mat
+    )
+
+    # Cooktop
+    cooktop_x = counter_x + cabinet_width * 0.22
+    create_box(
+        "Kitchen_Cooktop",
+        (cooktop_x, counter_y - 0.03,
+         counter_height + top_thickness + 0.014),
+        (0.23, 0.18, 0.014),
+        black_mat
+    )
+
+    # Refrigerator at the right side
+    fridge_width = min(0.62, WIDTH * 0.16)
+    fridge_depth = min(0.65, LENGTH * 0.20)
+    fridge_height = min(1.95, HEIGHT * 0.68)
+    fridge_x = WIDTH / 2 - fridge_width / 2 - 0.12
+    fridge_y = counter_y
+
+    create_box(
+        "Kitchen_Refrigerator",
+        (fridge_x, fridge_y, fridge_height / 2),
+        (fridge_width / 2, fridge_depth / 2, fridge_height / 2),
+        white_mat
+    )
+
+    create_box(
+        "Kitchen_Refrigerator_Handle",
+        (fridge_x - fridge_width * 0.30,
+         fridge_y - fridge_depth / 2 - 0.015,
+         fridge_height * 0.55),
+        (0.018, 0.018, fridge_height * 0.18),
+        metal_mat
+    )
+
+    # Visible under-cabinet light strip
+    create_box(
+        "Kitchen_Under_Cabinet_Light_Strip",
+        (counter_x, counter_y - 0.08, upper_z - upper_height / 2 - 0.015),
+        (cabinet_width * 0.38, 0.025, 0.012),
+        create_material("Kitchen_Light_Strip", "#FFE5A3", roughness=0.25)
+    )
+
+    print("Procedural kitchen created.")
+
 
 
 # =========================================================
@@ -1271,7 +1482,7 @@ def create_area_light(
     )
 
     light_data.energy = (
-        energy * brightness
+        energy * brightness * 1.5
     )
 
     light_data.shape = "DISK"
@@ -1292,93 +1503,54 @@ def create_area_light(
     return obj
 
 
-# Key light
 
+
+# =========================================================
+# BRIGHT NEUTRAL-WHITE KITCHEN LIGHTING
+# =========================================================
+
+
+# Key light — soft white illumination
 create_area_light(
     "AI_Key_Light",
-    (
-        0,
-        -0.5,
-        HEIGHT - 0.3
-    ),
-    900,
+    (0, -2.0, HEIGHT - 0.2),
+    800,
+    4
+)
+
+# Fill light — gentle illumination on the left
+create_area_light(
+    "AI_Fill_Light",
+    (-2.0, -0.2, 2.2),
+    250,
     3
 )
 
-
-# Fill light
-
-create_area_light(
-    "AI_Fill_Light",
-    (
-        -3,
-        1,
-        2.2
-    ),
-    500,
-    2
-)
-
-
-# Ceiling light
-
+# Ceiling light — balanced illumination
 create_area_light(
     "AI_Ceiling_Light",
-    (
-        0,
-        0,
-        HEIGHT - 0.2
-    ),
-    700,
-    2
+    (0, 0.5, HEIGHT - 0.15),
+    500,
+    3
 )
 
-
-# Warm / daylight point light
-
+# Neutral-white point light
 warm_data = bpy.data.lights.new(
     "AI_Warm_Light",
     type="POINT"
 )
 
-warm_data.energy = (
-    150 * brightness
-)
-
-
-if lighting_type == "warm":
-
-    warm_data.color = (
-        1.0,
-        0.55,
-        0.3
-    )
-
-else:
-
-    warm_data.color = (
-        1.0,
-        1.0,
-        1.0
-    )
-
+warm_data.energy = 100 * brightness * 1.5
+warm_data.color = (1.0, 1.0, 1.0)
 
 warm_light = bpy.data.objects.new(
     "AI_Warm_Light",
     warm_data
 )
 
-bpy.context.scene.collection.objects.link(
-    warm_light
-)
+bpy.context.scene.collection.objects.link(warm_light)
 
-warm_light.location = (
-    1.5,
-    0.5,
-    2.2
-)
-
-
+warm_light.location = (1.5, 0.5, 2.2)
 # =========================================================
 # CAMERA
 # =========================================================
@@ -1430,11 +1602,78 @@ camera.rotation_euler = (
     ).to_euler()
 )
 
-camera_data.lens = 24
+# Camera settings for interior photography
+camera_data.lens = float(
+    scene_data.get("camera", {}).get("lens", 28)
+)
 
+camera_data.sensor_width = 36
+camera_data.clip_start = 0.05
+camera_data.clip_end = 100
+
+# Keep the camera settings predictable
+camera_data.type = "PERSP"
+
+
+# =========================================================
+# =========================================================
+# CAMERA FRAMING
+# =========================================================
+
+
+# =========================================================
+# CAMERA FRAMING
+# =========================================================
+
+print("[7/9] Configuring camera framing...")
+
+from mathutils import Vector
+
+# Read the camera settings from scene_generated.json
+camera_position = scene_data["camera"]["position"]
+camera_target = scene_data["camera"]["target"]
+
+# Apply the requested camera position
+camera.location = Vector(
+    tuple(float(v) for v in camera_position)
+)
+
+# Aim the camera at the requested target
+target = Vector(
+    tuple(float(v) for v in camera_target)
+)
+
+direction = target - camera.location
+
+camera.rotation_euler = direction.to_track_quat(
+    "-Z", "Y"
+).to_euler()
+
+# Apply camera settings
+camera_data.lens = float(
+    scene_data.get("camera", {}).get("lens", 28)
+)
+camera_data.sensor_width = 36
+camera_data.sensor_fit = "AUTO"
+camera_data.clip_start = 0.1
+camera_data.clip_end = 200
+
+# Activate the camera
 bpy.context.scene.camera = camera
 
+print(
+    "Camera position:",
+    tuple(round(v, 2) for v in camera.location)
+)
+print(
+    "Camera target:",
+    tuple(round(v, 2) for v in target)
+)
+print("Camera lens:", camera_data.lens, "mm")
 
+# =========================================================
+# WORLD
+# =========================================================
 # =========================================================
 # WORLD
 # =========================================================
@@ -1464,15 +1703,15 @@ if background:
     background.inputs[
         "Color"
     ].default_value = (
-        0.04,
-        0.04,
-        0.04,
+        0.15,
+        0.15,
+        0.15,
         1
     )
 
     background.inputs[
         "Strength"
-    ].default_value = 0.3
+    ].default_value = 0.5
 
 
 # =========================================================
@@ -1483,17 +1722,29 @@ print("")
 print("[8/9] Configuring render...")
 
 
+
 scene = bpy.context.scene
 
+# Render engine
 scene.render.engine = "BLENDER_EEVEE"
 
-scene.render.resolution_x = 800
-
-scene.render.resolution_y = 600
-
+# Higher-quality widescreen image
+scene.render.resolution_x = 1280
+scene.render.resolution_y = 720
 scene.render.resolution_percentage = 100
 
+# Blender 5.2 compatible render settings
+# Keep default Eevee lighting; do not use the removed GTAO properties.
+# Color management for a more balanced architectural render
+scene.view_settings.view_transform = "AgX"
+scene.view_settings.look = "AgX - Medium High Contrast"
+scene.view_settings.exposure = 0.3
+scene.view_settings.gamma = 1.0
+
+# Save as PNG
 scene.render.image_settings.file_format = "PNG"
+scene.render.image_settings.color_mode = "RGBA"
+scene.render.film_transparent = False
 
 
 # =========================================================

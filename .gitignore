@@ -1,11 +1,30 @@
-﻿.venv/
+.venv/
+venv/
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
+.env
+.env.*
+!.env.example
+.idea/
 *.blend1
 *.blend2
-renders/
-projects/
+*.bak
+*.backup
 *.log
-.vscode/
-.idea/
+*-backup*
+*_backup*
+*_before_*
+renders/
+
+# Generated Blender experiments
+projects/*.blend
+projects/*.blend1
+projects/uploaded_images/
+models/.cache/
+*.backup*
+*_render_log.*
+
+# Local experiments and reference images
+projects/
+models/.cache/
+

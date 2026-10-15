@@ -386,11 +386,12 @@ def smart_living_room_layout(
 # SMART BEDROOM
 # =========================================================
 
-def smart_bedroom_layout(
-    room_width,
-    room_length
-):
+def smart_bedroom_layout(room_width, room_length):
     assets = []
+
+    # ========================================================
+    # BED
+    # ========================================================
 
     bed = create_asset(
         "Bed_Modern",
@@ -401,11 +402,15 @@ def smart_bedroom_layout(
 
     assets.append(bed)
 
+    # ========================================================
+    # WARDROBE
+    # ========================================================
+
     wardrobe = create_asset(
         "Wardrobe_Modern",
         [
-            room_width * 0.30,
-            -room_length * 0.28,
+            room_width * 0.10,
+            -room_length * 0.31,
             0
         ],
         [0, 0, 0],
@@ -414,11 +419,15 @@ def smart_bedroom_layout(
 
     assets.append(wardrobe)
 
+    # ========================================================
+    # LAMP
+    # ========================================================
+
     lamp = create_asset(
         "Lamp_Modern",
         [
-            -room_width * 0.30,
-            room_length * 0.10,
+            -room_width * 0.3925,
+            -room_length * 0.29,
             0
         ],
         [0, 0, 0],
@@ -428,7 +437,6 @@ def smart_bedroom_layout(
     assets.append(lamp)
 
     return assets
-
 
 # =========================================================
 # SMART OFFICE
@@ -537,41 +545,45 @@ def smart_dining_room_layout(
 # SMART LAYOUT GENERATOR
 # =========================================================
 
+
 def generate_layout(
     room_type,
     room_width,
     room_length
 ):
+    if room_type == "kitchen":
+        # Kitchen furniture will be generated
+        # procedurally in the Blender scene generator.
+        return []
 
-    if room_type == "bedroom":
-
+    elif room_type == "bedroom":
         return smart_bedroom_layout(
             room_width,
             room_length
         )
 
     elif room_type == "office":
-
         return smart_office_layout(
             room_width,
             room_length
         )
 
     elif room_type == "dining_room":
-
         return smart_dining_room_layout(
             room_width,
             room_length
         )
 
-    else:
-
+    elif room_type == "living_room":
         return smart_living_room_layout(
             room_width,
             room_length
         )
 
-
+    else:
+        raise ValueError(
+            f"Unsupported room type: {room_type}"
+        )
 # =========================================================
 # SMART VALIDATION + REPOSITIONING
 # =========================================================
