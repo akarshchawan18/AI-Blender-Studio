@@ -28,3 +28,7 @@ models/.cache/
 projects/
 models/.cache/
 
+
+# Local AI model weights and Hugging Face cache
+models/*.pt
+models/.cache/
