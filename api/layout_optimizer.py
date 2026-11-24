@@ -23,7 +23,8 @@ from api.layout_engine import (
     optimize_layout,
     optimize_space_rules,
     optimize_architecture,
-    layout_is_valid
+    layout_is_valid,
+    find_best_position
 )
 
 from api.layout_score import score_layout
@@ -274,6 +275,7 @@ def apply_design_asset_selection(
         # Add other requested assets
         # ----------------------------------------------------
 
+
         existing = {
             asset["asset"]
             for asset in assets
@@ -289,6 +291,9 @@ def apply_design_asset_selection(
                     "rotation": [0, 0, 0],
                     "scale": [1, 1, 1]
                 })
+
+                # Update immediately to prevent duplicates.
+                existing.add(asset_name)
 
                 print(
                     f"Added missing requested asset: "
@@ -766,7 +771,8 @@ def create_design_candidate(
     room_type,
     room_width,
     room_length,
-    variation=0
+    variation=0,
+    architecture=None
 ):
     """
     Creates one Day-15 design-aware candidate.
@@ -872,6 +878,98 @@ def create_design_candidate(
 
                     asset["rotation"][2] = 5
 
+    # Find a chair position that satisfies both furniture
+    # collision checks and architectural clearance rules.
+    chair = next(
+        (asset for asset in assets
+         if asset.get("asset") == "Chair_Modern"),
+        None
+    )
+
+    if chair is not None:
+        other_assets = [
+            asset for asset in assets
+            if asset is not chair
+        ]
+
+        suggested_position = find_best_position(
+            chair,
+            other_assets,
+            room_width,
+            room_length
+        )
+
+        position_candidates = []
+
+        if suggested_position is not None:
+            position_candidates.append(
+                (suggested_position[0], suggested_position[1])
+            )
+
+        # Prefer the right side of the room, then try other
+        # positions if furniture or architecture blocks it.
+        position_candidates.extend([
+            (room_width * 0.34, 0.0),
+            (room_width * 0.34, -room_length * 0.16),
+            (room_width * 0.375, -room_length * 0.18),
+            (-room_width * 0.325, -room_length * 0.16),
+            (room_width * 0.325, -room_length * 0.16),
+            (room_width * 0.325, 0.0),
+            (-room_width * 0.325, 0.0),
+            (0.0, -room_length * 0.30),
+            (0.0, room_length * 0.10),
+        ])
+
+        # Remove duplicate positions while preserving their order.
+        position_candidates = list(dict.fromkeys(
+            (round(x, 4), round(y, 4))
+            for x, y in position_candidates
+        ))
+
+        selected_position = None
+        fallback_position = None
+
+        for x, y in position_candidates:
+            test_assets = copy.deepcopy(assets)
+            test_chair = next(
+                item for item in test_assets
+                if item.get("asset") == "Chair_Modern"
+            )
+            test_chair["position"] = [
+                x, y, chair["position"][2]
+            ]
+
+            if not layout_is_valid(
+                test_assets, room_width, room_length
+            ):
+                continue
+
+            # Keep a layout-valid fallback if architecture is
+            # missing or every tested position triggers a warning.
+            if fallback_position is None:
+                fallback_position = [x, y, chair["position"][2]]
+
+            if architecture:
+                arch_result = validate_architecture(
+                    assets=test_assets,
+                    room_width=room_width,
+                    room_length=room_length,
+                    architecture=architecture
+                )
+
+                if not arch_result.get("valid", False):
+                    continue
+
+            selected_position = [
+                x, y, chair["position"][2]
+            ]
+            break
+
+        if selected_position is not None:
+            chair["position"] = selected_position
+        elif fallback_position is not None:
+            chair["position"] = fallback_position
+
     return assets
 
 
@@ -908,7 +1006,8 @@ def find_best_design_layout(
             room_type,
             room_width,
             room_length,
-            variation
+            variation,
+            architecture=architecture
         )
 
         # ----------------------------------------------------

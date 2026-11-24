@@ -32,3 +32,28 @@ models/.cache/
 # Local AI model weights and Hugging Face cache
 models/*.pt
 models/.cache/
+
+# Local database
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated test output
+/image_analysis_test.json
+/kitchen_interior.blend
+/kitchen_preview.png
+
+# Temporary diagnostic scripts
+/furniture_bounds_diagnostic.py
+/inspect_*.py
+
+# Blender experimental generator copies
+/blender/ai_interior_generator_camera_working.py
+/blender/ai_interior_generator_chair_test.py
+/blender/ai_interior_generator_red_test.py
+/blender/ai_interior_generator_repeat_test_*.py
+
+# Experimental scene configurations
+/scene_generated_camera_working.json
+/scene_generated_one_chair_test.json

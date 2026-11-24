@@ -1,0 +1,1496 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#082d2e">
+    <title>AI Blender Studio | Interior Designer</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #0f3d3e;
+            --primary-dark: #082d2e;
+            --accent: #d5a51a;
+            --background: #f5f4ef;
+            --surface: #ffffff;
+            --text: #202b2b;
+            --muted: #697575;
+            --border: #e1e5df;
+            --success: #17653c;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: var(--background);
+            color: var(--text);
+        }
+
+        header {
+            background: linear-gradient(
+                135deg,
+                var(--primary-dark),
+                var(--primary)
+            );
+            color: white;
+            padding: 28px 8%;
+            border-bottom: 3px solid var(--accent);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 30px;
+            letter-spacing: -0.5px;
+        }
+
+        header p {
+            margin: 8px 0 0;
+            color: #d5e1de;
+            font-size: 15px;
+        }
+
+        main {
+            max-width: 1050px;
+            margin: 40px auto;
+            padding: 0 22px;
+        }
+
+        .intro {
+            margin-bottom: 25px;
+        }
+
+        .intro h2 {
+            margin: 0 0 8px;
+            font-size: 27px;
+        }
+
+        .intro p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .panel {
+            background: var(--surface);
+            padding: 28px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            box-shadow: 0 8px 30px rgba(8, 45, 46, 0.05);
+            margin-bottom: 26px;
+        }
+
+        h2 {
+            margin-top: 0;
+            font-size: 22px;
+            letter-spacing: -0.3px;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        textarea {
+            display: block;
+            width: 100%;
+            min-height: 145px;
+            padding: 16px;
+            border: 1px solid #cbd5d1;
+            border-radius: 10px;
+            font: inherit;
+            line-height: 1.6;
+            resize: vertical;
+            background: #fdfdfb;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(15, 61, 62, 0.1);
+        }
+
+        .example {
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+
+        button {
+            padding: 13px 20px;
+            margin: 14px 8px 0 0;
+            border: none;
+            border-radius: 9px;
+            background: var(--primary);
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.2s;
+        }
+
+        button:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: wait;
+            transform: none;
+        }
+
+        .primary-btn {
+            background: var(--primary);
+        }
+
+        #status {
+            margin: 18px 0 0;
+            color: var(--muted);
+            line-height: 1.7;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+
+        #progressContainer {
+            margin-top: 20px;
+        }
+
+        .progress-track {
+            width: 100%;
+            height: 9px;
+            overflow: hidden;
+            background: #e5ebe7;
+            border-radius: 20px;
+        }
+
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                var(--primary),
+                var(--accent)
+            );
+            border-radius: 20px;
+            transition: width 0.5s ease;
+        }
+
+        #progressText {
+            margin: 10px 0 0;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        #progressContainer.active .progress-bar {
+            width: 40%;
+            animation: progressPulse 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes progressPulse {
+            from { width: 15%; }
+            to { width: 85%; }
+        }
+
+        .render-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .render-heading h2 {
+            margin-bottom: 14px;
+        }
+
+        .render-description {
+            margin: -5px 0 0;
+            color: var(--muted);
+            line-height: 1.6;
+            font-size: 14px;
+        }
+
+        .render-badge {
+            display: inline-block;
+            padding: 7px 12px;
+            border-radius: 20px;
+            background: #f0f1ec;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .render-badge.ready {
+            background: #e3f3e9;
+            color: var(--success);
+        }
+
+        .render-placeholder {
+            min-height: 280px;
+            margin-top: 22px;
+            padding: 35px 20px;
+            border: 2px dashed #d7ded8;
+            border-radius: 12px;
+            background: #fafbf8;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .placeholder-icon {
+            font-size: 42px;
+            color: var(--accent);
+        }
+
+        .render-placeholder h3 {
+            margin: 12px 0 4px;
+            font-size: 18px;
+        }
+
+        .render-placeholder p {
+            max-width: 360px;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        #render {
+            display: block;
+            width: 100%;
+            height: auto;
+            max-height: 750px;
+            object-fit: contain;
+            margin-top: 22px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: #eeeee9;
+        }
+
+        .render-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 8px;
+        }
+
+        .render-actions button {
+            margin-right: 0;
+        }
+
+        .download-btn {
+            background: var(--accent);
+            color: var(--primary-dark);
+        }
+
+        .download-btn:hover {
+            background: #e8c65a;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        footer {
+            padding: 25px 20px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        @media (max-width: 600px) {
+            header {
+                padding: 24px 20px;
+            }
+
+            header h1 {
+                font-size: 25px;
+            }
+
+            main {
+                margin: 25px auto;
+                padding: 0 14px;
+            }
+
+            .intro h2 {
+                font-size: 23px;
+            }
+
+            .panel {
+                padding: 20px;
+                border-radius: 12px;
+            }
+
+            button {
+                width: 100%;
+                margin: 12px 0 0;
+            }
+
+            .render-actions {
+                flex-direction: column;
+            }
+
+            .render-placeholder {
+                min-height: 220px;
+            }
+        }
+
+.history-item {
+    padding: 16px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-item p {
+    margin: 8px 0;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.history-meta {
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.history-item button {
+    margin-top: 6px;
+    padding: 9px 13px;
+    font-size: 13px;
+}
+
+.history-empty {
+    padding: 20px 0;
+    color: var(--muted);
+}
+input[type="email"],
+input[type="password"] {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 16px;
+    border: 1px solid #cbd5d1;
+    border-radius: 10px;
+    font: inherit;
+    background: #fdfdfb;
+}
+
+input[type="email"]:focus,
+input[type="password"]:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(15, 61, 62, 0.1);
+}
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>AI Blender Studio</h1>
+        <p>Turn your room ideas into 3D interior renders.</p>
+    </header>
+
+    <main>
+        <div class="intro">
+            <h2>Design your dream space</h2>
+            <p>
+                Describe your ideal interior, generate a 3D render,
+                and preview or download your design.
+            </p>
+        </div>
+
+<!-- =====================================================
+     CUSTOMER ACCOUNT
+===================================================== -->
+
+<section class="panel" id="authPanel">
+    <h2>Customer Account</h2>
+
+    <p id="authMessage" role="status" aria-live="polite">
+        Login or create an account to access your projects.
+    </p>
+
+    <div id="authForm">
+        <label for="authEmail">Email address</label>
+        <input
+            type="email"
+            id="authEmail"
+            autocomplete="username"
+            placeholder="you@example.com"
+            required
+        >
+
+        <label for="authPassword">Password</label>
+        <input
+            type="password"
+            id="authPassword"
+            autocomplete="current-password"
+            minlength="8"
+            maxlength="128"
+            placeholder="Enter your password"
+            required
+        >
+
+        <button onclick="loginCustomer()" class="primary-btn">
+            Login
+        </button>
+
+        <button onclick="registerCustomer()">
+            Create Account
+        </button>
+    </div>
+
+    <div id="accountInfo" class="hidden">
+        <p>
+            Logged in as:
+            <strong id="currentUserEmail"></strong>
+        </p>
+
+        <button onclick="logoutCustomer()" class="download-btn">
+            Logout
+        </button>
+    </div>
+</section>
+
+<div id="appWorkspace" class="hidden">
+        <section class="panel">
+            <h2>Create your interior</h2>
+
+            <label for="prompt">Describe your room</label>
+
+            <textarea
+                id="prompt"
+                placeholder="Example: Create a modern living room with a teal sofa, wooden coffee table, black TV console, beige walls, and warm lighting."
+            ></textarea>
+
+            <p class="example">
+                Tip: Mention the room type, furniture, colours,
+                and lighting for a more specific design.
+            </p>
+
+            <button
+                id="generateBtn"
+                class="primary-btn"
+                onclick="generateInterior()"
+            >
+                Generate Interior
+            </button>
+
+            <p id="status" role="status" aria-live="polite">
+                Enter a description to get started.
+            </p>
+
+            <div id="progressContainer" class="hidden">
+                <div
+                    class="progress-track"
+                    role="progressbar"
+                    aria-label="Interior generation activity"
+                    aria-valuetext="Generation in progress"
+                >
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <p id="progressText">
+                    Preparing your interior...
+                </p>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="render-heading">
+                <div>
+                    <h2>Your interior render</h2>
+                    <p class="render-description">
+                        Preview your generated design and save it as a PNG image.
+                    </p>
+                </div>
+
+                <span id="renderBadge" class="render-badge">
+                    No render yet
+                </span>
+            </div>
+
+            <div id="renderPlaceholder" class="render-placeholder">
+                <div class="placeholder-icon" aria-hidden="true">✦</div>
+                <h3>Your design will appear here</h3>
+                <p>
+                    Describe your room above and click Generate Interior
+                    to create your first render.
+                </p>
+            </div>
+
+            <img
+                id="render"
+                class="hidden"
+                alt="Generated interior render"
+            >
+
+            <div class="render-actions">
+                <button
+                    id="refreshBtn"
+                    onclick="previewRender()"
+                >
+                    Refresh Preview
+                </button>
+
+                <button
+                    id="downloadBtn"
+                    class="download-btn"
+                    onclick="downloadRender()"
+                >
+                    Download PNG
+                </button>
+                <button
+    id="downloadBlendBtn"
+    class="download-btn"
+    onclick="downloadBlend()"
+>
+    Download Blender Project
+</button>
+            </div>
+        </section>
+
+<section class="panel">
+    <h2>Generate from a room photograph</h2>
+
+    <label for="roomImage">Upload your room photograph</label>
+
+    <input
+        type="file"
+        id="roomImage"
+        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+    >
+
+    <p class="example">
+        Supported formats: JPG, PNG and WEBP. Maximum file size: 15 MB.
+    </p>
+
+    <button
+        id="generateImageBtn"
+        class="primary-btn"
+        onclick="generateFromImage()"
+    >
+        Generate from Image
+    </button>
+</section>
+
+<section class="panel">
+    <h2>AI Kitchen Designer</h2>
+
+    <label for="kitchenPrompt">Describe your ideal kitchen</label>
+
+    <textarea
+        id="kitchenPrompt"
+        placeholder="Example: Create a luxury modern kitchen with white matte cabinets, oak accents, black quartz countertops, a spacious island and warm lighting."
+    ></textarea>
+
+    <button
+        id="generateKitchenBtn"
+        class="primary-btn"
+        onclick="generateKitchen()"
+    >
+        Generate Kitchen
+    </button>
+</section>
+
+<section class="panel">
+    <h2>Generation history</h2>
+    <p class="render-description">
+        Review your previous prompts and generated designs.
+    </p>
+
+    <div id="historyList">
+        <p class="example">No generations saved yet.</p>
+    </div>
+
+    <button onclick="loadHistory()" class="download-btn">
+    Refresh History
+</button>
+</section>
+</div>
+    </main>
+
+    <footer>
+        AI Blender Studio · 3D interior design from your ideas
+    </footer>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let hasGeneratedRender = false;
+        let previousImageUrl = null;
+        let currentJobId = null;
+
+// =========================================================
+// CUSTOMER AUTHENTICATION
+// =========================================================
+
+const AUTH_TOKEN_KEY = "aiStudioAccessToken";
+
+let currentUser = null;
+
+
+// Retrieve the current access token.
+function getAccessToken() {
+    return sessionStorage.getItem(AUTH_TOKEN_KEY);
+}
+
+
+// Add authentication to protected API requests.
+function authHeaders(extraHeaders = {}) {
+    const headers = { ...extraHeaders };
+    const token = getAccessToken();
+
+    if (token) {
+        headers.Authorization = `Bearer ${token}`;
+    }
+
+    return headers;
+}
+
+
+// Update account and workspace visibility.
+function updateAuthUI(user) {
+    const authForm = document.getElementById("authForm");
+    const accountInfo = document.getElementById("accountInfo");
+    const workspace = document.getElementById("appWorkspace");
+    const message = document.getElementById("authMessage");
+
+    if (user) {
+        authForm.classList.add("hidden");
+        accountInfo.classList.remove("hidden");
+        workspace.classList.remove("hidden");
+
+        document.getElementById("currentUserEmail").textContent =
+            user.email;
+
+        message.textContent = "You are logged in.";
+
+    } else {
+        authForm.classList.remove("hidden");
+        accountInfo.classList.add("hidden");
+        workspace.classList.add("hidden");
+
+        document.getElementById("currentUserEmail").textContent = "";
+
+        message.textContent =
+            "Login or create an account to access your projects.";
+    }
+}
+
+
+// Handle authentication API responses.
+async function sendAuthRequest(endpoint, payload) {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+        const detail = data.detail;
+
+        throw new Error(
+            typeof detail === "string"
+                ? detail
+                : "Authentication request failed."
+        );
+    }
+
+    return data;
+}
+
+
+// Establish a browser session after successful authentication.
+async function establishSession(data) {
+    if (!data.access_token || !data.user) {
+        throw new Error("Authentication response is incomplete.");
+    }
+
+    sessionStorage.setItem(
+        AUTH_TOKEN_KEY,
+        data.access_token
+    );
+
+    currentUser = data.user;
+
+    updateAuthUI(currentUser);
+
+    document.getElementById("authPassword").value = "";
+
+    document.getElementById("status").textContent =
+        "Welcome, " + currentUser.email;
+
+    await loadHistory();
+}
+
+
+// =========================================================
+// CUSTOMER LOGIN
+// =========================================================
+
+async function loginCustomer() {
+    const email = document
+        .getElementById("authEmail")
+        .value.trim();
+
+    const password = document
+        .getElementById("authPassword")
+        .value;
+
+    const message = document.getElementById("authMessage");
+
+    if (!email || !password) {
+        message.textContent = "Enter your email and password.";
+        return;
+    }
+
+    try {
+        message.textContent = "Logging in...";
+
+        const data = await sendAuthRequest(
+            "/auth/login",
+            { email, password }
+        );
+
+        await establishSession(data);
+
+    } catch (error) {
+        message.textContent = "Login failed: " + error.message;
+    }
+}
+
+
+// =========================================================
+// CUSTOMER REGISTRATION
+// =========================================================
+
+async function registerCustomer() {
+    const email = document
+        .getElementById("authEmail")
+        .value.trim();
+
+    const password = document
+        .getElementById("authPassword")
+        .value;
+
+    const message = document.getElementById("authMessage");
+
+    if (!email || !password) {
+        message.textContent = "Enter your email and password.";
+        return;
+    }
+
+    if (password.length < 8) {
+        message.textContent =
+            "Password must contain at least 8 characters.";
+        return;
+    }
+
+    try {
+        message.textContent = "Creating your account...";
+
+        const data = await sendAuthRequest(
+            "/auth/register",
+            { email, password }
+        );
+
+        await establishSession(data);
+
+    } catch (error) {
+        message.textContent =
+            "Registration failed: " + error.message;
+    }
+}
+
+
+// =========================================================
+// CUSTOMER LOGOUT
+// =========================================================
+
+function logoutCustomer() {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY);
+
+    currentUser = null;
+    currentJobId = null;
+    hasGeneratedRender = false;
+
+    if (previousImageUrl) {
+        URL.revokeObjectURL(previousImageUrl);
+        previousImageUrl = null;
+    }
+
+    const render = document.getElementById("render");
+    render.removeAttribute("src");
+    render.classList.add("hidden");
+
+    document.getElementById("renderPlaceholder").classList.remove("hidden");
+
+    const badge = document.getElementById("renderBadge");
+    badge.textContent = "No render yet";
+    badge.classList.remove("ready");
+
+    document.getElementById("historyList").replaceChildren();
+
+    updateAuthUI(null);
+
+    document.getElementById("status").textContent =
+        "You have logged out successfully.";
+}
+
+
+// =========================================================
+// RESTORE SESSION AFTER PAGE REFRESH
+// =========================================================
+
+async function restoreSession() {
+    const token = getAccessToken();
+
+    if (!token) {
+        updateAuthUI(null);
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/auth/me`, {
+            headers: authHeaders(),
+            cache: "no-store"
+        });
+
+        if (!response.ok) {
+            throw new Error("Your session has expired.");
+        }
+
+        const data = await response.json();
+
+        currentUser = data.user;
+
+        updateAuthUI(currentUser);
+
+        await loadHistory();
+
+    } catch (error) {
+        sessionStorage.removeItem(AUTH_TOKEN_KEY);
+
+        currentUser = null;
+
+        updateAuthUI(null);
+
+        document.getElementById("authMessage").textContent =
+            error.message + " Please log in again.";
+    }
+}
+
+
+        async function generateInterior() {
+            const prompt = document
+                .getElementById("prompt")
+                .value
+                .trim();
+
+            const status = document.getElementById("status");
+            const button = document.getElementById("generateBtn");
+            const progress = document.getElementById("progressContainer");
+            const progressText = document.getElementById("progressText");
+            const progressBar = document.getElementById("progressBar");
+
+            const badge = document.getElementById("renderBadge");
+            const downloadBtn = document.getElementById("downloadBtn");
+
+            if (!prompt) {
+                status.textContent = "Please enter a room description.";
+                document.getElementById("prompt").focus();
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = "Generating...";
+            progress.classList.remove("hidden");
+            progress.classList.add("active");
+            progressText.textContent =
+                "Generating your 3D interior. Please wait...";
+            progressBar.style.width = "";
+
+            status.textContent =
+                "Sending your prompt to the AI Blender Studio backend...";
+
+            try {
+                const response = await fetch(`${API_URL}/generate`, {
+                    method: "POST",
+                    headers: authHeaders({
+    "Content-Type": "application/json"
+}),
+                    body: JSON.stringify({ prompt })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.detail || "Interior generation failed."
+                    );
+                }
+                if (!data.job_id) {
+    throw new Error(
+        "API response did not include a generation job ID."
+    );
+}
+
+currentJobId = data.job_id;
+
+progress.classList.remove("active");
+progressBar.style.width = "100%";
+progressText.textContent = "Your render is ready!";
+
+status.textContent =
+    "Interior generated successfully!\n" +
+    "Layout score: " + data.layout_score;
+
+// Refresh persistent history from FastAPI.
+await loadHistory();
+
+// Display this job's render.
+await previewRender();
+
+            } catch (error) {
+                progress.classList.remove("active");
+                progress.classList.add("hidden");
+
+                status.textContent =
+                    "Error: " + error.message +
+                    "\nCheck that the FastAPI server is running.";
+
+            } finally {
+                button.disabled = false;
+                button.textContent = "Generate Interior";
+            }
+        }
+
+        async function previewRender() {
+            const status = document.getElementById("status");
+            const render = document.getElementById("render");
+            const placeholder = document.getElementById("renderPlaceholder");
+            const badge = document.getElementById("renderBadge");
+            const refreshBtn = document.getElementById("refreshBtn");
+
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Loading...";
+
+            try {
+                if (!currentJobId) {
+    throw new Error("No generation job selected.");
+}
+
+const response = await fetch(
+    `${API_URL}/jobs/${encodeURIComponent(currentJobId)}/preview?t=${Date.now()}`,
+    {
+        headers: authHeaders(),
+        cache: "no-store"
+    }
+);
+
+                if (!response.ok) {
+                    throw new Error(
+                        "Could not load the render. Generate an interior first."
+                    );
+                }
+
+                const imageBlob = await response.blob();
+
+                if (!imageBlob.type.startsWith("image/")) {
+                    throw new Error("The server did not return an image.");
+                }
+
+                const imageUrl = URL.createObjectURL(imageBlob);
+
+                // Wait for the new image to load before replacing the old one.
+                await new Promise((resolve, reject) => {
+                    const testImage = new Image();
+
+                    testImage.onload = resolve;
+                    testImage.onerror = () => {
+                        URL.revokeObjectURL(imageUrl);
+                        reject(new Error("The render image could not be displayed."));
+                    };
+
+                    testImage.src = imageUrl;
+                });
+
+                if (previousImageUrl) {
+                    URL.revokeObjectURL(previousImageUrl);
+                }
+
+                previousImageUrl = imageUrl;
+                render.src = imageUrl;
+
+                render.classList.remove("hidden");
+                placeholder.classList.add("hidden");
+
+                badge.textContent = "Render ready";
+                badge.classList.add("ready");
+
+                hasGeneratedRender = true;
+
+            } catch (error) {
+                status.textContent =
+                    "Preview error: " + error.message +
+                    "\nCheck that the FastAPI server is running.";
+
+                if (!hasGeneratedRender) {
+                    badge.textContent = "Preview unavailable";
+                }
+
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = "Refresh Preview";
+            }
+        }
+
+
+async function downloadAuthenticatedFile(endpoint, filename) {
+    const status = document.getElementById("status");
+
+    try {
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            headers: authHeaders(),
+            cache: "no-store"
+        });
+
+        if (response.status === 401) {
+            logoutCustomer();
+            throw new Error("Your session has expired. Please log in again.");
+        }
+
+        if (!response.ok) {
+            throw new Error(`Download failed (HTTP ${response.status}).`);
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+        status.textContent = "Download completed successfully.";
+
+    } catch (error) {
+        status.textContent = "Download error: " + error.message;
+    }
+}
+
+function downloadRender() {
+    if (!currentJobId) {
+        document.getElementById("status").textContent =
+            "Please generate an interior before downloading.";
+        return;
+    }
+
+    downloadAuthenticatedFile(
+        `/jobs/${encodeURIComponent(currentJobId)}/download`,
+        "interior_render.png"
+    );
+}
+
+function downloadBlend() {
+    if (!currentJobId) {
+        document.getElementById("status").textContent =
+            "Please generate an interior first.";
+        return;
+    }
+
+    downloadAuthenticatedFile(
+        `/jobs/${encodeURIComponent(currentJobId)}/blend`,
+        "interior.blend"
+    );
+}
+
+async function readJobResponse(response, fallbackMessage) {
+    let data = {};
+
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error(
+            `${fallbackMessage} (HTTP ${response.status})`
+        );
+    }
+
+    if (!response.ok) {
+        const detail = data.detail;
+
+        const message = typeof detail === "string"
+            ? detail
+            : detail
+                ? JSON.stringify(detail)
+                : fallbackMessage;
+
+        throw new Error(message);
+    }
+
+    if (!data.job_id) {
+        throw new Error("API response did not include a job ID.");
+    }
+
+    return data;
+}
+
+
+// =========================================================
+// IMAGE-TO-INTERIOR GENERATION
+// =========================================================
+
+async function generateFromImage() {
+    const fileInput = document.getElementById("roomImage");
+    const button = document.getElementById("generateImageBtn");
+    const status = document.getElementById("status");
+    const progress = document.getElementById("progressContainer");
+    const progressText = document.getElementById("progressText");
+    const progressBar = document.getElementById("progressBar");
+
+    const file = fileInput.files[0];
+
+    if (!file) {
+        status.textContent = "Please select a room photograph.";
+        fileInput.focus();
+        return;
+    }
+
+    const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+        status.textContent = "Please upload a JPG, PNG or WEBP image.";
+        return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+        status.textContent = "Image size cannot exceed 15 MB.";
+        return;
+    }
+
+    if (file.size === 0) {
+        status.textContent = "The selected image is empty.";
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Analyzing Image...";
+
+    progress.classList.remove("hidden");
+    progress.classList.add("active");
+    progressBar.style.width = "";
+    progressText.textContent =
+        "Analyzing your room and generating a 3D interior...";
+
+    status.textContent = "Uploading your room photograph...";
+
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const response = await fetch(
+            `${API_URL}/generate-from-image`,
+            {
+    method: "POST",
+    headers: authHeaders(),
+    body: formData
+}
+        );
+
+        const data = await readJobResponse(
+            response,
+            "Image-based interior generation failed."
+        );
+
+        currentJobId = data.job_id;
+
+        progress.classList.remove("active");
+        progressBar.style.width = "100%";
+        progressText.textContent = "Your image-based design is ready!";
+
+        status.textContent =
+            "Interior generated successfully from your photograph!\n" +
+            "Room: " + data.room_type +
+            "\nLayout score: " + data.layout_score;
+
+      // Refresh persistent history from FastAPI.
+await loadHistory();
+
+// Display this image-generation job's render.
+await previewRender();
+
+    } catch (error) {
+        progress.classList.remove("active");
+        progress.classList.add("hidden");
+
+        status.textContent =
+            "Image generation error: " + error.message;
+
+    } finally {
+        button.disabled = false;
+        button.textContent = "Generate from Image";
+    }
+}
+
+
+// =========================================================
+// TEXT-TO-KITCHEN GENERATION
+// =========================================================
+
+async function generateKitchen() {
+    const prompt = document
+        .getElementById("kitchenPrompt")
+        .value
+        .trim();
+
+    const button = document.getElementById("generateKitchenBtn");
+    const status = document.getElementById("status");
+    const progress = document.getElementById("progressContainer");
+    const progressText = document.getElementById("progressText");
+    const progressBar = document.getElementById("progressBar");
+
+    if (!prompt) {
+        status.textContent = "Please describe your kitchen design.";
+        document.getElementById("kitchenPrompt").focus();
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = "Generating Kitchen...";
+
+    progress.classList.remove("hidden");
+    progress.classList.add("active");
+    progressBar.style.width = "";
+    progressText.textContent = "Generating your 3D kitchen...";
+
+    status.textContent =
+        "Sending your kitchen design request to AI Blender Studio...";
+
+    try {
+        const response = await fetch(
+            `${API_URL}/generate-kitchen`,
+            {
+                method: "POST",
+                headers: authHeaders({
+    "Content-Type": "application/json"
+}),
+                body: JSON.stringify({ prompt })
+            }
+        );
+
+        const data = await readJobResponse(
+            response,
+            "Kitchen generation failed."
+        );
+
+        currentJobId = data.job_id;
+
+        progress.classList.remove("active");
+        progressBar.style.width = "100%";
+        progressText.textContent = "Your kitchen render is ready!";
+
+        status.textContent =
+            "Kitchen generated successfully!\n" +
+            "Job ID: " + data.job_id;
+
+        // Refresh persistent history from FastAPI.
+await loadHistory();
+
+// Display this kitchen job's render.
+await previewRender();
+
+    } catch (error) {
+        progress.classList.remove("active");
+        progress.classList.add("hidden");
+
+        status.textContent =
+            "Kitchen generation error: " + error.message;
+
+    } finally {
+        button.disabled = false;
+        button.textContent = "Generate Kitchen";
+    }
+}
+
+
+// =========================================================
+// PERSISTENT GENERATION HISTORY — FASTAPI
+// =========================================================
+
+let jobHistory = [];
+
+
+// Load generation history from the backend.
+async function loadHistory() {
+    const container = document.getElementById("historyList");
+
+    container.textContent = "Loading saved projects...";
+
+    try {
+        const response = await fetch(`${API_URL}/jobs`, {
+    headers: authHeaders(),
+    cache: "no-store"
+});
+        if (!response.ok) {
+            throw new Error(
+                `Could not retrieve saved projects. HTTP ${response.status}`
+            );
+        }
+
+        const data = await response.json();
+
+        jobHistory = Array.isArray(data.jobs)
+            ? data.jobs
+            : [];
+
+        displayHistory();
+
+        return true;
+
+    } catch (error) {
+        container.textContent =
+            "Could not load saved projects: " + error.message;
+
+        console.error("History loading error:", error);
+
+        return false;
+    }
+}
+
+
+// Display saved generation jobs.
+function displayHistory() {
+    const container = document.getElementById("historyList");
+
+    container.replaceChildren();
+
+    if (jobHistory.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "history-empty";
+        empty.textContent = "No completed projects found.";
+
+        container.appendChild(empty);
+        return;
+    }
+
+    jobHistory.forEach((item) => {
+        const entry = document.createElement("div");
+        entry.className = "history-item";
+
+        // Generation prompt
+        const prompt = document.createElement("p");
+        prompt.textContent =
+            item.prompt || "Untitled generation";
+
+        // Job information
+        const meta = document.createElement("p");
+        meta.className = "history-meta";
+
+        const jobTypeLabels = {
+            interior: "Text-to-Interior",
+            image: "Image-to-Interior",
+            kitchen: "AI Kitchen"
+        };
+
+        const jobType =
+            jobTypeLabels[item.job_type] || item.job_type;
+
+        const created = item.created_at
+            ? new Date(item.created_at).toLocaleString()
+            : "Date unavailable";
+
+        meta.textContent =
+            "Type: " + jobType +
+            " | Status: " + item.status +
+            " | Created: " + created;
+
+        // Open saved project
+        const openButton = document.createElement("button");
+
+        openButton.textContent = "Open Project";
+        openButton.disabled = !item.job_id;
+
+        openButton.addEventListener("click", async () => {
+            if (!item.job_id) {
+                return;
+            }
+
+            currentJobId = item.job_id;
+
+            document.getElementById("status").textContent =
+                "Opening saved project...";
+
+            await previewRender();
+
+            document.getElementById("render").scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        });
+
+        entry.append(prompt, meta, openButton);
+
+        // Reuse prompts for text and kitchen jobs.
+        // Image jobs use uploaded photographs, not text prompts.
+        if (
+            item.job_type === "interior" ||
+            item.job_type === "kitchen"
+        ) {
+            const reuseButton = document.createElement("button");
+
+            reuseButton.textContent = "Reuse Prompt";
+
+            reuseButton.addEventListener("click", () => {
+                const inputId =
+                    item.job_type === "kitchen"
+                        ? "kitchenPrompt"
+                        : "prompt";
+
+                const input = document.getElementById(inputId);
+
+                input.value = item.prompt || "";
+                input.focus();
+
+                document.getElementById("status").textContent =
+                    "Previous prompt restored.";
+            });
+
+            entry.appendChild(reuseButton);
+        }
+
+        container.appendChild(entry);
+    });
+}
+
+
+// Load persistent backend history when the website opens.
+restoreSession();
+
+
+    </script>
+</body>
+</html>

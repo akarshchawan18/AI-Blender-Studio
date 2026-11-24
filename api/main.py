@@ -1,11 +1,25 @@
-
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi import (
+    FastAPI,
+    UploadFile,
+    File,
+    HTTPException,
+    Depends,
+)
+from api.database import Job, User, get_db
+from api.auth import (
+    router as auth_router,
+    get_current_user,
+)
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import json
 import os
 import subprocess
 import uuid
 import math
+from pathlib import Path
+from datetime import datetime, timezone
 
 from api.image_analyzer import analyze_room_image
 from api.image_design_adapter import create_image_design_intent
@@ -34,6 +48,18 @@ app = FastAPI(
     description="Local AI-ready Interior Design Generator",
     version="3.2.0",
 )
+app.add_middleware(
+    CORSMiddleware,
+allow_origins=[
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+# Register customer authentication endpoints
+app.include_router(auth_router)
 
 
 # =========================================================
@@ -49,6 +75,74 @@ IMAGE_UPLOAD_DIR = os.path.join(
 )
 
 SCENE_FILE = os.path.join(PROJECT_DIR, "scene_generated.json")
+# =========================================================
+# JOB-SPECIFIC PROJECT STORAGE
+# =========================================================
+
+JOBS_DIR = os.path.join(
+    PROJECT_DIR,
+    "projects",
+    "jobs"
+)
+
+os.makedirs(JOBS_DIR, exist_ok=True)
+
+
+def create_job_paths(job_type):
+    """Create unique input and output paths for one generation."""
+
+    allowed_types = {
+        "interior",
+        "image",
+        "kitchen"
+    }
+
+    if job_type not in allowed_types:
+        raise ValueError("Unsupported generation type.")
+
+    job_id = uuid.uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    job_dir = os.path.join(
+        JOBS_DIR,
+        job_id
+    )
+
+    os.makedirs(job_dir, exist_ok=False)
+
+    return {
+        "job_id": job_id,
+        "job_type": job_type,
+        "created_at": created_at,
+        "job_dir": job_dir,
+
+        "scene_file": os.path.join(
+            job_dir,
+            "scene.json"
+        ),
+
+        "kitchen_config_file": os.path.join(
+            job_dir,
+            "kitchen_config.json"
+        ),
+
+        "blend_file": os.path.join(
+            job_dir,
+            "interior.blend"
+        ),
+
+        "render_file": os.path.join(
+            job_dir,
+            "render.png"
+        ),
+
+        "metadata_file": os.path.join(
+            job_dir,
+            "metadata.json"
+        ),
+
+        "job_type": job_type
+    }
 
 BLENDER_EXE = (
     r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
@@ -71,6 +165,7 @@ class GenerateRequest(BaseModel):
 
 class GenerateResponse(BaseModel):
     status: str
+    job_id: str
     message: str
     prompt: str
     planner: str
@@ -86,6 +181,109 @@ class GenerateResponse(BaseModel):
     render_file: str
     blender_return_code: int
 
+# =========================================================
+# PERSISTENT JOB METADATA
+# =========================================================
+
+
+def save_job_metadata(
+    job_paths,
+    prompt,
+    details=None,
+    *,
+    user_id,
+    db,
+):
+    """Save completed job metadata and its customer ownership record."""
+
+    completed_at = datetime.now(timezone.utc)
+
+    file_candidates = {
+        "scene": job_paths.get("scene_file"),
+        "kitchen_config": job_paths.get("kitchen_config_file"),
+        "input_image": job_paths.get("input_image_file"),
+        "blend": job_paths.get("blend_file"),
+        "render": job_paths.get("render_file"),
+    }
+
+    available_files = {}
+
+    for name, file_path in file_candidates.items():
+        if file_path and os.path.isfile(file_path):
+            available_files[name] = os.path.basename(file_path)
+
+    metadata = {
+        "job_id": job_paths["job_id"],
+        "user_id": user_id,
+        "job_type": job_paths["job_type"],
+        "status": "completed",
+        "prompt": prompt,
+        "created_at": job_paths["created_at"],
+        "completed_at": completed_at.isoformat(),
+        "files": available_files,
+        "details": details or {},
+    }
+
+    metadata_file = job_paths["metadata_file"]
+    temporary_file = metadata_file + ".tmp"
+
+    os.makedirs(
+        os.path.dirname(metadata_file),
+        exist_ok=True
+    )
+
+    try:
+        # Write metadata atomically.
+        with open(
+            temporary_file,
+            "w",
+            encoding="utf-8"
+        ) as file:
+            json.dump(
+                metadata,
+                file,
+                indent=4,
+                ensure_ascii=False,
+                allow_nan=False
+            )
+
+        os.replace(temporary_file, metadata_file)
+
+        # Create the customer ownership record.
+        job_record = Job(
+            id=job_paths["job_id"],
+            user_id=user_id,
+            job_type=job_paths["job_type"],
+            status="completed",
+            prompt=prompt,
+            job_dir=job_paths["job_dir"],
+            created_at=datetime.fromisoformat(
+                job_paths["created_at"]
+            ),
+            completed_at=completed_at,
+        )
+
+        db.add(job_record)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+
+        if os.path.exists(temporary_file):
+            os.remove(temporary_file)
+
+        if os.path.exists(metadata_file):
+            os.remove(metadata_file)
+
+        raise
+
+    print(
+        "Job metadata and ownership saved:",
+        metadata_file,
+        flush=True
+    )
+
+    return metadata
 
 # =========================================================
 # ROOT
@@ -104,21 +302,33 @@ def root():
 # COLOR DETECTION
 # =========================================================
 
+
 def detect_sofa_color(prompt):
     prompt = prompt.lower()
 
-    if "grey sofa" in prompt or "gray sofa" in prompt:
+    if "deep teal" in prompt or "teal" in prompt:
+        return "#0E6259"
+
+    if "red" in prompt or "crimson" in prompt or "burgundy" in prompt:
+        if "burgundy" in prompt:
+            return "#800020"
+        if "crimson" in prompt:
+            return "#DC143C"
+        return "#C62828"
+
+    if "grey" in prompt or "gray" in prompt:
         return "#808080"
-    if "white sofa" in prompt:
+    if "white" in prompt:
         return "#F5F5F5"
-    if "black sofa" in prompt:
+    if "black" in prompt:
         return "#202020"
-    if "beige sofa" in prompt:
+    if "beige" in prompt:
         return "#D8C3A5"
-    if "brown sofa" in prompt:
+    if "brown" in prompt:
         return "#6B4226"
 
     return "#C8B39A"
+
 
 
 def detect_wall_color(prompt):
@@ -141,16 +351,23 @@ def detect_wall_color(prompt):
 def detect_floor_color(prompt):
     prompt = prompt.lower()
 
+    if "oak" in prompt or "warm wood" in prompt or "natural wood" in prompt:
+        return "#B88752"
+
     if "light wood" in prompt:
         return "#C69C6D"
+
     if "dark wood" in prompt:
         return "#5A3825"
+
     if "white floor" in prompt:
         return "#E8E8E8"
+
     if "grey floor" in prompt or "gray floor" in prompt:
         return "#858585"
 
     return "#8B5E3C"
+
 
 
 # =========================================================
@@ -215,8 +432,8 @@ def detect_camera(prompt):
         }
 
     return {
-        "position": [4.2, -4.2, 2.5],
-        "target": [0.0, 0.0, 1.1],
+        "position": [0.0, -6.5, 3.5],
+        "target": [0.0, 0.0, 0.7]
     }
 
 
@@ -423,20 +640,22 @@ def validate_blender_scene(scene_data):
     return True
 
 
-def save_and_verify_scene(scene_data):
-    """Write the JSON and validate the file Blender will actually read."""
+def save_and_verify_scene(scene_data, scene_file=None):
+    """Save and validate a scene using its job-specific JSON path."""
 
-    os.makedirs(os.path.dirname(SCENE_FILE), exist_ok=True)
+    scene_file = scene_file or SCENE_FILE
 
-    with open(SCENE_FILE, "w", encoding="utf-8") as file:
+    os.makedirs(os.path.dirname(scene_file), exist_ok=True)
+
+    with open(scene_file, "w", encoding="utf-8") as file:
         json.dump(scene_data, file, indent=4, allow_nan=False)
 
-    with open(SCENE_FILE, "r", encoding="utf-8") as file:
+    with open(scene_file, "r", encoding="utf-8") as file:
         saved_scene = json.load(file)
 
     validate_blender_scene(saved_scene)
 
-    print("Validated scene:", SCENE_FILE)
+    print("Validated scene:", scene_file)
     print("Room:", saved_scene["room"])
     print("Furniture count:", len(saved_scene["assets"]))
 
@@ -447,12 +666,38 @@ def save_and_verify_scene(scene_data):
 # BLENDER EXECUTION
 # =========================================================
 
-def run_blender():
+def run_blender(job_paths=None):
+    """Run Blender, log its output, and verify generated files."""
+    # Job-specific input and output paths
+    job_paths = job_paths or {}
+
+    scene_file = job_paths.get("scene_file", SCENE_FILE)
+
+    blend_file = job_paths.get(
+        "blend_file",
+        os.path.join(PROJECT_DIR, "projects", "AI_Interior_Final.blend")
+    )
+
+    render_file = job_paths.get(
+        "render_file",
+        os.path.join(PROJECT_DIR, "renders", "AI_Interior_Final.png")
+    )
+
+    # Pass job-specific paths to Blender
+    blender_env = os.environ.copy()
+
+    blender_env.update({
+        "AI_STUDIO_SCENE_FILE": scene_file,
+        "AI_STUDIO_BLEND_FILE": blend_file,
+        "AI_STUDIO_RENDER_FILE": render_file,
+    })
+
     if not os.path.isfile(BLENDER_EXE):
         raise HTTPException(
             status_code=500,
             detail=f"Blender executable not found: {BLENDER_EXE}",
         )
+
 
     if not os.path.isfile(BLENDER_SCRIPT):
         raise HTTPException(
@@ -472,24 +717,42 @@ def run_blender():
             capture_output=True,
             text=True,
             timeout=300,
+            env=blender_env,
         )
+
     except subprocess.TimeoutExpired as exc:
+        print(
+            "ERROR: Blender generation timed out after 300 seconds.",
+            flush=True,
+        )
+        print("TIMEOUT STDOUT:", exc.stdout, flush=True)
+        print("TIMEOUT STDERR:", exc.stderr, flush=True)
+
         raise HTTPException(
             status_code=500,
             detail="Blender generation timed out after 300 seconds.",
         ) from exc
+
     except OSError as exc:
+        print(f"ERROR: Could not start Blender: {exc}", flush=True)
+
         raise HTTPException(
             status_code=500,
             detail=f"Could not start Blender: {exc}",
         ) from exc
 
-    if result.returncode != 0:
-        print("BLENDER STDOUT:")
-        print(result.stdout[-6000:])
-        print("BLENDER STDERR:")
-        print(result.stderr[-6000:])
+    # Always display Blender's output after it finishes.
+    print("\n=== BLENDER STDOUT ===", flush=True)
+    print(result.stdout[-6000:], flush=True)
 
+    print("\n=== BLENDER STDERR ===", flush=True)
+    print(result.stderr[-6000:], flush=True)
+
+    print("\n=== BLENDER RETURN CODE ===", flush=True)
+    print(result.returncode, flush=True)
+
+    # Stop if Blender reports an error.
+    if result.returncode != 0:
         raise HTTPException(
             status_code=500,
             detail={
@@ -500,26 +763,33 @@ def run_blender():
             },
         )
 
-    blend_file = os.path.join(
-        PROJECT_DIR, "projects", "AI_Interior_Final.blend"
-    )
-    render_file = os.path.join(
-        PROJECT_DIR, "renders", "AI_Interior_Final.png"
-    )
 
+    # Verify that Blender generated the expected files.
     if not os.path.isfile(blend_file):
         raise HTTPException(
             status_code=500,
-            detail="Blender completed but the .blend file was not created.",
+            detail=(
+                "Blender completed, but the expected "
+                ".blend file was not created."
+            ),
         )
 
     if not os.path.isfile(render_file):
         raise HTTPException(
             status_code=500,
-            detail="Blender completed but the render was not created.",
+            detail=(
+                "Blender completed, but the expected "
+                "render was not created."
+            ),
         )
 
+    print("Blender output files verified.", flush=True)
+    print(f"Blend file: {blend_file}", flush=True)
+    print(f"Render file: {render_file}", flush=True)
+
     return result, blend_file, render_file
+
+
 
 
 # =========================================================
@@ -568,7 +838,14 @@ def create_local_scene(prompt_text):
     assets = apply_room_size_to_assets(assets, room_size)
     assets = apply_style_to_assets(assets, style)
 
-    if room_type == "living_room" and "chair" in prompt:
+    if (
+        room_type == "living_room"
+        and "chair" in prompt
+        and not any(
+            asset.get("asset") == "Chair_Modern"
+            for asset in assets
+        )
+    ):
         assets.append({
             "asset": "Chair_Modern",
             "position": [room_width * 0.30, room_length * 0.10, 0.0],
@@ -638,7 +915,11 @@ def create_local_scene(prompt_text):
 # =========================================================
 
 @app.post("/generate", response_model=GenerateResponse)
-def generate(request: GenerateRequest):
+def generate(
+    request: GenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
     prompt = request.prompt.strip()
 
     if not prompt:
@@ -646,16 +927,36 @@ def generate(request: GenerateRequest):
             status_code=400,
             detail="Prompt cannot be empty.",
         )
+    job_paths = create_job_paths("interior")
 
     scene_data = create_local_scene(prompt)
-    scene_data = save_and_verify_scene(scene_data)
+    scene_data = save_and_verify_scene(
+        scene_data,
+        job_paths["scene_file"]
+    )
 
     validation = scene_data.get("validation", {})
 
-    result, blend_file, render_file = run_blender()
+    result, blend_file, render_file = run_blender(job_paths)
+    # Save persistent job history
+    save_job_metadata(
+        job_paths=job_paths,
+        prompt=prompt,
+        user_id=current_user.id,
+        db=db,
+        details={
+            "room_type": scene_data["room"]["type"],
+            "room_size": scene_data["room"]["size"],
+            "style": scene_data.get("style", "modern"),
+            "layout_score": float(
+                validation.get("layout_score", 0)
+            ),
+        },
+    )
 
     return GenerateResponse(
         status="success",
+        job_id=job_paths["job_id"],
         message="AI interior generated successfully.",
         prompt=prompt,
         planner="local",
@@ -666,19 +967,385 @@ def generate(request: GenerateRequest):
         layout_variation=int(validation.get("layout_variation", 0)),
         candidates_tested=int(validation.get("candidates_tested", 0)),
         layout_valid=bool(validation.get("layout_valid", False)),
-        scene_file=SCENE_FILE,
+        scene_file=job_paths["scene_file"],
         blend_file=blend_file,
         render_file=render_file,
         blender_return_code=result.returncode,
     )
+@app.get("/preview", include_in_schema=False)
+def preview_render():
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy preview endpoint disabled. Use the authenticated job preview endpoint.",
+    )
+
+
+@app.get("/download", include_in_schema=False)
+def download_render():
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy download endpoint disabled. Use the authenticated job download endpoint.",
+    )
+
+# =========================================================
+# JOB-SPECIFIC FILE ACCESS
+# =========================================================
 
 
 # =========================================================
-# ANALYZE IMAGE ONLY
+# SECURE JOB ACCESS AND OWNERSHIP
 # =========================================================
+
+def get_job_directory(job_id):
+    """Resolve a safe job directory using its UUID."""
+
+    if (
+        len(job_id) != 32
+        or any(c not in "0123456789abcdefABCDEF" for c in job_id)
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Generation job not found."
+        )
+
+    return os.path.join(JOBS_DIR, job_id.lower())
+
+
+def get_owned_job(job_id, current_user, db):
+    """Verify that the authenticated customer owns the job."""
+
+    job_dir = get_job_directory(job_id)
+
+    job_record = db.get(Job, job_id.lower())
+
+    if job_record is None or job_record.user_id != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Generation job not found."
+        )
+
+    # Verify the database record points to the expected job directory.
+    if os.path.normcase(os.path.abspath(job_record.job_dir)) != (
+        os.path.normcase(os.path.abspath(job_dir))
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Generation job not found."
+        )
+
+    return job_dir, job_record
+
+
+# =========================================================
+# CUSTOMER JOB HISTORY
+# =========================================================
+
+@app.get("/jobs")
+def list_jobs(
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Return only completed jobs belonging to the current customer."""
+
+    job_records = (
+        db.query(Job)
+        .filter(
+            Job.user_id == current_user.id,
+            Job.status == "completed",
+        )
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+
+    jobs = []
+
+    for record in job_records:
+
+        job_dir = get_job_directory(record.id)
+
+        metadata_file = os.path.join(
+            job_dir,
+            "metadata.json"
+        )
+
+        if not os.path.isfile(metadata_file):
+            continue
+
+        try:
+            with open(
+                metadata_file,
+                "r",
+                encoding="utf-8"
+            ) as file:
+                metadata = json.load(file)
+
+            if not isinstance(metadata, dict):
+                continue
+
+            # Database ownership is authoritative.
+            if metadata.get("job_id") != record.id:
+                continue
+
+            if metadata.get("user_id") != current_user.id:
+                continue
+
+            if metadata.get("status") != "completed":
+                continue
+
+            metadata["files_available"] = {
+                "scene": os.path.isfile(
+                    os.path.join(job_dir, "scene.json")
+                ),
+                "blend": os.path.isfile(
+                    os.path.join(job_dir, "interior.blend")
+                ),
+                "render": os.path.isfile(
+                    os.path.join(job_dir, "render.png")
+                ),
+                "input_image": any(
+                    os.path.isfile(
+                        os.path.join(job_dir, filename)
+                    )
+                    for filename in (
+                        "input.png",
+                        "input.jpg",
+                        "input.jpeg",
+                        "input.webp",
+                    )
+                ),
+            }
+
+            metadata["urls"] = {
+                "preview": f"/jobs/{record.id}/preview",
+                "download": f"/jobs/{record.id}/download",
+                "blend": f"/jobs/{record.id}/blend",
+            }
+
+            jobs.append(metadata)
+
+        except (OSError, json.JSONDecodeError) as exc:
+            print(
+                f"WARNING: Could not read job {record.id}: {exc}",
+                flush=True
+            )
+
+    return {
+        "status": "success",
+        "count": len(jobs),
+        "jobs": jobs,
+    }
+
+
+# =========================================================
+# INDIVIDUAL JOB DETAILS
+# =========================================================
+
+@app.get("/jobs/{job_id}")
+def get_job_details(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Return job details only to the owning customer."""
+
+    job_dir, job_record = get_owned_job(
+        job_id,
+        current_user,
+        db
+    )
+
+    metadata_file = os.path.join(
+        job_dir,
+        "metadata.json"
+    )
+
+    if not os.path.isfile(metadata_file):
+        raise HTTPException(
+            status_code=404,
+            detail="Job metadata not found."
+        )
+
+    try:
+        with open(
+            metadata_file,
+            "r",
+            encoding="utf-8"
+        ) as file:
+            metadata = json.load(file)
+
+    except (OSError, json.JSONDecodeError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Could not read job metadata."
+        ) from exc
+
+    if not isinstance(metadata, dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Job metadata has an invalid format."
+        )
+
+    if (
+        metadata.get("job_id") != job_record.id
+        or metadata.get("user_id") != current_user.id
+        or metadata.get("status") != "completed"
+    ):
+        raise HTTPException(
+            status_code=404,
+            detail="Generation job not found."
+        )
+
+    metadata["files_available"] = {
+        "scene": os.path.isfile(
+            os.path.join(job_dir, "scene.json")
+        ),
+        "blend": os.path.isfile(
+            os.path.join(job_dir, "interior.blend")
+        ),
+        "render": os.path.isfile(
+            os.path.join(job_dir, "render.png")
+        ),
+    }
+
+    metadata["urls"] = {
+        "preview": f"/jobs/{job_record.id}/preview",
+        "download": f"/jobs/{job_record.id}/download",
+        "blend": f"/jobs/{job_record.id}/blend",
+    }
+
+    return metadata
+
+
+# =========================================================
+# SECURE RENDER PREVIEW
+# =========================================================
+
+@app.get("/jobs/{job_id}/preview")
+def preview_job(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+
+    job_dir, job_record = get_owned_job(
+        job_id,
+        current_user,
+        db
+    )
+
+    if job_record.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Generation job is not completed."
+        )
+
+    render_path = Path(job_dir) / "render.png"
+
+    if not render_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Render not found for this job."
+        )
+
+    return FileResponse(
+        path=render_path,
+        media_type="image/png",
+        content_disposition_type="inline"
+    )
+
+
+# =========================================================
+# SECURE PNG DOWNLOAD
+# =========================================================
+
+@app.get("/jobs/{job_id}/download")
+def download_job_render(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+
+    job_dir, job_record = get_owned_job(
+        job_id,
+        current_user,
+        db
+    )
+
+    if job_record.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Generation job is not completed."
+        )
+
+    render_path = Path(job_dir) / "render.png"
+
+    if not render_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Render not found for this job."
+        )
+
+    return FileResponse(
+        path=render_path,
+        media_type="image/png",
+        filename="interior_render.png"
+    )
+
+
+# =========================================================
+# SECURE BLENDER PROJECT DOWNLOAD
+# =========================================================
+
+@app.get("/jobs/{job_id}/blend")
+def download_job_blend(
+    job_id: str,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
+
+    job_dir, job_record = get_owned_job(
+        job_id,
+        current_user,
+        db
+    )
+
+    if job_record.status != "completed":
+        raise HTTPException(
+            status_code=409,
+            detail="Generation job is not completed."
+        )
+
+    blend_path = Path(job_dir) / "interior.blend"
+
+    if not blend_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="Blender project not found for this job."
+        )
+
+    return FileResponse(
+        path=blend_path,
+        media_type="application/octet-stream",
+        filename="interior.blend"
+    )
+
+# =========================================================
+# PERSISTENT JOB HISTORY API
+# =========================================================
+
+@app.get("/status", include_in_schema=False)
+def render_status():
+    raise HTTPException(
+        status_code=410,
+        detail="Legacy status endpoint disabled. Use authenticated job history.",
+    )
+
 
 @app.post("/analyze-image")
-async def analyze_image(file: UploadFile = File(...)):
+async def analyze_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
     if not file.filename:
         raise HTTPException(
             status_code=400,
@@ -753,7 +1420,6 @@ async def analyze_image(file: UploadFile = File(...)):
     finally:
         await file.close()
 
-
 # =========================================================
 # GENERATE FROM UPLOADED IMAGE
 # =========================================================
@@ -762,7 +1428,11 @@ async def analyze_image(file: UploadFile = File(...)):
 
 
 @app.post("/generate-from-image")
-async def generate_from_image(file: UploadFile = File(...)):
+async def generate_from_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
     # 1. Validate the uploaded file
     if not file.filename:
         raise HTTPException(
@@ -779,13 +1449,17 @@ async def generate_from_image(file: UploadFile = File(...)):
             status_code=400,
             detail="Unsupported image type. Use JPG, JPEG, PNG or WEBP."
         )
+    # Create an isolated job for this image generation
+    job_paths = create_job_paths("image")
 
-    # 2. Save the uploaded image
-    os.makedirs(IMAGE_UPLOAD_DIR, exist_ok=True)
 
-    image_id = uuid.uuid4().hex
-    image_filename = f"{image_id}{extension}"
-    image_path = os.path.join(IMAGE_UPLOAD_DIR, image_filename)
+    # 2. Save the uploaded image inside its job folder
+    image_filename = f"input{extension}"
+
+    image_path = os.path.join(
+        job_paths["job_dir"],
+        image_filename
+    )
 
     total_bytes = 0
     max_file_size = 15 * 1024 * 1024
@@ -935,7 +1609,7 @@ async def generate_from_image(file: UploadFile = File(...)):
     # 10. Extract the selected layout
     assets = best_layout.get("assets", [])
     layout_score = best_layout.get("score", 0)
-    layout_valid = best_layout.get("valid", False)
+    layout_valid = best_layout.get("layout_valid", best_layout.get("valid", False))
     layout_variation = best_layout.get("variation", 0)
     candidates_tested = len(layout_result.get("candidates", []))
 
@@ -962,6 +1636,41 @@ async def generate_from_image(file: UploadFile = File(...)):
                 0.0,
                 0.0
             ]
+    # Derive representative material colors from image analysis.
+    detected_colors = design_intent.get("colors", [])
+
+    # Use detected dominant colors where appropriate.
+    dominant_colors = design_intent.get("dominant_colors", [])
+
+    color_map = {
+        color.get("name", "").lower(): color.get("hex")
+        for color in dominant_colors
+        if isinstance(color, dict)
+           and isinstance(color.get("hex"), str)
+           and color["hex"].startswith("#")
+           and len(color["hex"]) == 7
+    }
+
+    wall_color = color_map.get("white", "#E8DED0")
+    floor_color = "#8B5E3C"
+    sofa_color = color_map.get("brown_red", "#B8202F")
+    chair_color = color_map.get("grey", "#B0A090")
+
+    # Keep safe material defaults because colors are not
+    # associated with specific objects by the image analyzer.
+
+    brightness_level = (
+        analysis.get("visual", {})
+        .get("brightness", {})
+        .get("level", "unknown")
+    )
+
+    lighting_brightness = {
+        "dark": 0.25,
+        "medium_dark": 0.35,
+        "bright": 0.55,
+        "very_bright": 0.70,
+    }.get(brightness_level, 0.40)
 
 
     # 11. Build scene data in Blender-compatible format
@@ -981,18 +1690,29 @@ async def generate_from_image(file: UploadFile = File(...)):
         "style": design_intent.get("style", "modern"),
         "materials": {
             "style": design_intent.get("style", "modern"),
-            "colors": design_intent.get("colors", []),
+            "colors": detected_colors,
+            "dominant_colors": design_intent.get(
+                "dominant_colors",
+                []
+            ),
+            "wall": wall_color,
+            "floor": floor_color,
+            "ceiling": "#F5F5F5",
+            "sofa": sofa_color,
+            "chair": chair_color,
+            "wood": "#795548",
+            "black": "#111111",
         },
         "lighting": {
             "type": design_intent.get("lighting", "warm"),
-            "brightness": 0.40,
+            "brightness": lighting_brightness,
         },
 
         "camera": {
             "position": [
-                0.0,
-                -7.0,
-                3.8,
+                -4.0,
+                -6.5,
+                3.5,
             ],
             "target": [
                 0.0,
@@ -1101,11 +1821,14 @@ async def generate_from_image(file: UploadFile = File(...)):
                     ),
                 )
 
-    # 12. Write the validated scene JSON
-    try:
-        os.makedirs(os.path.dirname(SCENE_FILE), exist_ok=True)
 
-        with open(SCENE_FILE, "w", encoding="utf-8") as scene_file:
+    # 12. Write the validated scene JSON
+    scene_file_path = job_paths["scene_file"]
+
+    try:
+        os.makedirs(os.path.dirname(scene_file_path), exist_ok=True)
+
+        with open(scene_file_path, "w", encoding="utf-8") as scene_file:
             json.dump(scene_data, scene_file, indent=4)
 
     except Exception as exc:
@@ -1143,7 +1866,7 @@ async def generate_from_image(file: UploadFile = File(...)):
     print("Furniture count:", len(scene_data["assets"]))
     print("Layout score:", layout_score)
     print("Layout valid:", layout_valid)
-    print("Scene:", SCENE_FILE)
+    print("Scene:", scene_file_path)
 
     # 13. Check Blender paths
     if not os.path.exists(BLENDER_EXE):
@@ -1159,6 +1882,19 @@ async def generate_from_image(file: UploadFile = File(...)):
         )
 
     # 14. Run Blender
+    # Job-specific Blender input and output paths
+    scene_file_path = job_paths["scene_file"]
+    blend_file = job_paths["blend_file"]
+    render_file = job_paths["render_file"]
+
+    blender_env = os.environ.copy()
+
+    blender_env.update({
+        "AI_STUDIO_SCENE_FILE": scene_file_path,
+        "AI_STUDIO_BLEND_FILE": blend_file,
+        "AI_STUDIO_RENDER_FILE": render_file,
+    })
+
     try:
         result = subprocess.run(
             [
@@ -1171,6 +1907,7 @@ async def generate_from_image(file: UploadFile = File(...)):
             capture_output=True,
             text=True,
             timeout=300,
+            env=blender_env,
         )
 
     except subprocess.TimeoutExpired as exc:
@@ -1201,12 +1938,6 @@ async def generate_from_image(file: UploadFile = File(...)):
         )
 
     # 16. Verify output files
-    blend_file = os.path.join(
-        PROJECT_DIR, "projects", "AI_Interior_Final.blend"
-    )
-    render_file = os.path.join(
-        PROJECT_DIR, "renders", "AI_Interior_Final.png"
-    )
 
     if not os.path.isfile(blend_file):
         raise HTTPException(
@@ -1227,9 +1958,34 @@ async def generate_from_image(file: UploadFile = File(...)):
     print("Render:", render_file)
     print("Blender return code:", result.returncode)
 
+    # Save uploaded image path in job metadata
+    job_paths["input_image_file"] = image_path
+
+    # Save persistent image-generation history
+    save_job_metadata(
+        job_paths=job_paths,
+        prompt=f"Image-to-interior: {original_name}",
+        user_id=current_user.id,
+        db=db,
+        details={
+            "original_filename": original_name,
+            "source": "image",
+            "room_type": room_type,
+            "room_size": room_size,
+            "style": design_intent.get("style", "modern"),
+            "layout_score": float(layout_score),
+            "room_confidence": float(
+                design_intent.get("room_confidence", 0.0)
+            ),
+            "fallback_used": design_intent.get("fallback_used", False),
+        },
+    )
+
     # 17. Return result
+
     return {
         "status": "success",
+        "job_id": job_paths["job_id"],
         "message": "Interior generated successfully from image.",
         "source": "image",
         "original_filename": original_name,
@@ -1245,7 +2001,7 @@ async def generate_from_image(file: UploadFile = File(...)):
         "layout_variation": layout_variation,
         "candidates_tested": candidates_tested,
         "layout_valid": layout_valid,
-        "scene_file": SCENE_FILE,
+        "scene_file": scene_file_path,
         "blend_file": blend_file,
         "render_file": render_file,
         "blender_return_code": result.returncode,
@@ -1273,7 +2029,11 @@ async def generate_from_image(file: UploadFile = File(...)):
 
 
 @app.post("/generate-kitchen")
-def generate_kitchen(request: GenerateRequest):
+def generate_kitchen(
+    request: GenerateRequest,
+    current_user: User = Depends(get_current_user),
+    db=Depends(get_db),
+):
     prompt = request.prompt.strip().lower()
 
     # Choose cabinet finish.
@@ -1291,6 +2051,8 @@ def generate_kitchen(request: GenerateRequest):
             status_code=400,
             detail="Prompt cannot be empty.",
         )
+    # Create an isolated job for this kitchen generation
+    job_paths = create_job_paths("kitchen")
 
 
     # Choose cabinet color.
@@ -1387,11 +2149,7 @@ def generate_kitchen(request: GenerateRequest):
             break
 
     # Save settings for Blender.
-    config_file = os.path.join(
-        PROJECT_DIR,
-        "projects",
-        "kitchen_prompt.json",
-    )
+    config_file = job_paths["kitchen_config_file"]
 
     os.makedirs(os.path.dirname(config_file), exist_ok=True)
 
@@ -1416,17 +2174,8 @@ def generate_kitchen(request: GenerateRequest):
         "generate_realistic_kitchen.py",
     )
 
-    blend_file = os.path.join(
-        PROJECT_DIR,
-        "projects",
-        "AI_Interior_Realistic.blend",
-    )
-
-    render_file = os.path.join(
-        PROJECT_DIR,
-        "renders",
-        "AI_Interior_Realistic.png",
-    )
+    blend_file = job_paths["blend_file"]
+    render_file = job_paths["render_file"]
 
     if not os.path.isfile(BLENDER_EXE):
         raise HTTPException(
@@ -1439,6 +2188,14 @@ def generate_kitchen(request: GenerateRequest):
             status_code=500,
             detail="Realistic kitchen generator script was not found.",
         )
+    # Pass job-specific paths to Blender
+    blender_env = os.environ.copy()
+
+    blender_env.update({
+        "AI_STUDIO_KITCHEN_CONFIG": config_file,
+        "AI_STUDIO_BLEND_FILE": blend_file,
+        "AI_STUDIO_RENDER_FILE": render_file,
+    })
 
     try:
         result = subprocess.run(
@@ -1452,7 +2209,16 @@ def generate_kitchen(request: GenerateRequest):
             capture_output=True,
             text=True,
             timeout=300,
+            env=blender_env,
         )
+        print("=== BLENDER STDOUT ===")
+        print(result.stdout)
+
+        print("=== BLENDER STDERR ===")
+        print(result.stderr)
+
+        print("=== BLENDER RETURN CODE ===")
+        print(result.returncode)
 
     except subprocess.TimeoutExpired as exc:
         raise HTTPException(
@@ -1488,9 +2254,25 @@ def generate_kitchen(request: GenerateRequest):
             status_code=500,
             detail="Kitchen render was not created.",
         )
+    # Save persistent kitchen-generation history
+    save_job_metadata(
+        job_paths=job_paths,
+        prompt=prompt,
+        user_id=current_user.id,
+        db=db,
+        details={
+            "source": "kitchen",
+            "style": kitchen_style,
+            "cabinet_finish": cabinet_finish,
+            "cabinet_color": cabinet_color,
+            "counter_color": counter_color,
+            "lighting_tone": lighting_tone,
+        },
+    )
 
     return {
         "status": "success",
+        "job_id": job_paths["job_id"],
         "message": "Realistic kitchen generated successfully.",
         "prompt": prompt,
         "settings": {

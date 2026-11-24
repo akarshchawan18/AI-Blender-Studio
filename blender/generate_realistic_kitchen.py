@@ -5,11 +5,30 @@ import os
 from mathutils import Vector
 import json
 
-PROJECT = r"C:\python 311\PyCharm Community Edition 2023.1.3\projects\AI-Blender-Studio"
-BLEND_OUT = os.path.join(PROJECT, "projects", "AI_Interior_Realistic.blend")
-RENDER_OUT = os.path.join(PROJECT, "renders", "AI_Interior_Realistic.png")
+PROJECT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..")
+)
 
-CONFIG_FILE = os.path.join(PROJECT, "projects", "kitchen_prompt.json")
+BLEND_OUT = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_BLEND_FILE",
+        os.path.join(PROJECT, "projects", "AI_Interior_Realistic.blend")
+    )
+)
+
+RENDER_OUT = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_RENDER_FILE",
+        os.path.join(PROJECT, "renders", "AI_Interior_Realistic.png")
+    )
+)
+
+CONFIG_FILE = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_KITCHEN_CONFIG",
+        os.path.join(PROJECT, "projects", "kitchen_prompt.json")
+    )
+)
 
 # Default settings if a prompt setting is missing.
 CABINET_COLOR = (0.075, 0.19, 0.15)
@@ -79,9 +98,6 @@ def load_kitchen_config():
 
 
 load_kitchen_config()
-PROJECT = r"C:\python 311\PyCharm Community Edition 2023.1.3\projects\AI-Blender-Studio"
-BLEND_OUT = os.path.join(PROJECT, "projects", "AI_Interior_Realistic.blend")
-RENDER_OUT = os.path.join(PROJECT, "renders", "AI_Interior_Realistic.png")
 
 # Clear only the new scene being generated
 bpy.ops.object.select_all(action="SELECT")

@@ -18,7 +18,41 @@
             "brown_red",
             "brown",
             "grey"
-        ]
+        ],
+        "dominant_colors": [
+            {
+                "name": "white",
+                "percentage": 28.9,
+                "hex": "#F5F5F5"
+            },
+            {
+                "name": "mixed",
+                "percentage": 25.6,
+                "hex": null
+            },
+            {
+                "name": "brown_red",
+                "percentage": 23.4,
+                "hex": "#8B3A3A"
+            },
+            {
+                "name": "brown",
+                "percentage": 8.2,
+                "hex": "#795548"
+            },
+            {
+                "name": "grey",
+                "percentage": 4.9,
+                "hex": "#808080"
+            }
+        ],
+        "wall": "#F5F5F5",
+        "floor": "#8B5E3C",
+        "ceiling": "#F5F5F5",
+        "sofa": "#8B3A3A",
+        "chair": "#808080",
+        "wood": "#795548",
+        "black": "#111111"
     },
     "lighting": {
         "type": "neutral",
@@ -26,9 +60,9 @@
     },
     "camera": {
         "position": [
-            0.0,
-            -7.0,
-            3.8
+            -4.0,
+            -6.5,
+            3.5
         ],
         "target": [
             0.0,
@@ -40,7 +74,7 @@
         {
             "asset": "Sofa_Modern",
             "position": [
-                0.0,
+                0.5,
                 1.1,
                 0.0
             ],
@@ -76,7 +110,7 @@
         {
             "asset": "CoffeeTable_Modern",
             "position": [
-                0.0,
+                0.3,
                 -0.25,
                 0.0
             ],
@@ -110,14 +144,14 @@
             ]
         }
     ],
-    "layout_score": 73.0,
-    "layout_variation": 0,
-    "layout_valid": false,
+    "layout_score": 96.0,
+    "layout_variation": 3,
+    "layout_valid": true,
     "candidates_tested": 5,
     "source": "image",
     "image": {
         "filename": "dd.png",
-        "saved_path": "C:\\python 311\\PyCharm Community Edition 2023.1.3\\projects\\AI-Blender-Studio\\projects\\uploaded_images\\45d7d346b8984dd1a710df03605a000f.png",
+        "saved_path": "C:\\python 311\\PyCharm Community Edition 2023.1.3\\projects\\AI-Blender-Studio\\projects\\uploaded_images\\668c292e35924793a07bbd0d3e3ac545.png",
         "confidence": 0.319,
         "confidence_level": "medium",
         "fallback_used": true
@@ -166,6 +200,33 @@
             "brown_red",
             "brown",
             "grey"
+        ],
+        "dominant_colors": [
+            {
+                "name": "white",
+                "percentage": 28.9,
+                "hex": "#F5F5F5"
+            },
+            {
+                "name": "mixed",
+                "percentage": 25.6,
+                "hex": null
+            },
+            {
+                "name": "brown_red",
+                "percentage": 23.4,
+                "hex": "#8B3A3A"
+            },
+            {
+                "name": "brown",
+                "percentage": 8.2,
+                "hex": "#795548"
+            },
+            {
+                "name": "grey",
+                "percentage": 4.9,
+                "hex": "#808080"
+            }
         ],
         "lighting": "neutral",
         "image_orientation": "landscape",

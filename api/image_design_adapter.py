@@ -95,8 +95,12 @@ def _get_colors(analysis):
     ]
 
 
+
 def _get_brightness(analysis):
     visual = analysis.get("visual", {})
+
+    if not isinstance(visual, dict):
+        return "unknown"
 
     brightness = visual.get("brightness", {})
 
@@ -105,6 +109,66 @@ def _get_brightness(analysis):
 
     return brightness.get("level", "unknown")
 
+
+COLOR_HEX_MAP = {
+    "white": "#F5F5F5",
+    "black": "#202020",
+    "grey": "#808080",
+    "dark_grey": "#505050",
+    "beige_warm": "#D8C3A5",
+    "brown": "#795548",
+    "brown_red": "#8B3A3A",
+    "red": "#C62828",
+    "orange": "#D9822B",
+    "yellow": "#D4B83F",
+    "green": "#4F7950",
+    "blue": "#416B9A",
+    "purple": "#78558C",
+}
+
+
+def _get_color_hex(color_name):
+    if not isinstance(color_name, str):
+        return None
+
+    return COLOR_HEX_MAP.get(color_name.lower())
+
+
+def _get_dominant_colors(analysis):
+    visual = analysis.get("visual", {})
+
+    if not isinstance(visual, dict):
+        return []
+
+    dominant = visual.get("dominant_colors", [])
+
+    if not isinstance(dominant, list):
+        return []
+
+    results = []
+
+    for color in dominant:
+        if not isinstance(color, dict):
+            continue
+
+        name = color.get("name")
+        percentage = color.get("percentage")
+
+        if not isinstance(name, str):
+            continue
+
+        try:
+            percentage = float(percentage)
+        except (TypeError, ValueError):
+            continue
+
+        results.append({
+            "name": name.lower(),
+            "percentage": percentage,
+            "hex": _get_color_hex(name),
+        })
+
+    return results
 
 def _get_furniture(analysis):
     furniture_detection = analysis.get(
@@ -135,6 +199,7 @@ def create_image_design_intent(
     confidence = _get_room_confidence(analysis)
 
     colors = _get_colors(analysis)
+    dominant_colors = _get_dominant_colors(analysis)
 
     brightness = _get_brightness(analysis)
 
@@ -229,6 +294,7 @@ def create_image_design_intent(
         "requested_assets": assets,
 
         "colors": colors,
+        "dominant_colors": dominant_colors,
 
         "lighting": lighting,
 

@@ -19,9 +19,11 @@ PROJECT_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..")
 )
 
-JSON_PATH = os.path.join(
-    PROJECT_DIR,
-    "scene_generated.json"
+JSON_PATH = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_SCENE_FILE",
+        os.path.join(PROJECT_DIR, "scene_generated.json")
+    )
 )
 
 # Known-good master asset library
@@ -87,7 +89,23 @@ with open(
     scene_data = json.load(file)
 
 print("JSON loaded successfully.")
+# =========================================================
+# DOMINANT COLOR PALETTE DIAGNOSTIC (READ-ONLY)
+# =========================================================
 
+materials_data = scene_data.get("materials", {})
+dominant_colors = materials_data.get("dominant_colors", [])
+
+print("\n[IMAGE COLOR PALETTE]")
+if dominant_colors:
+    for color in dominant_colors:
+        print(
+            "Name:", color.get("name", "unknown"),
+            "| Percentage:", color.get("percentage", "unknown"),
+            "| HEX:", color.get("hex", "missing")
+        )
+else:
+    print("No dominant color palette found in scene JSON.")
 
 # =========================================================
 # VALIDATE JSON
@@ -239,7 +257,16 @@ def create_material(
         principled.inputs["Metallic"].default_value = metallic
 
         # Add procedural surface detail only to wood and countertop.
-        if name in ("Kitchen_Wood_Accent", "Kitchen_Black_Countertop"):
+        if name in (
+                "AI_Floor",
+                "AI_Coffee_Table_Oak",
+                "Kitchen_Wood_Accent",
+                "Kitchen_Black_Countertop",
+                "AI_Sofa",
+                "AI_Chair",
+                "AI_Chair",
+                "AI_Wall",
+        ):
             texcoord = nodes.new("ShaderNodeTexCoord")
             texcoord.location = (-700, 100)
 
@@ -258,8 +285,40 @@ def create_material(
             bump = nodes.new("ShaderNodeBump")
             bump.location = (180, -100)
 
-            if name == "Kitchen_Wood_Accent":
-                # Elongated noise creates a subtle wood-grain effect.
+            if name == "AI_Floor":
+
+                # Warm oak floor grain
+                mapping.inputs["Scale"].default_value = (1.5, 1.5, 24.0)
+                noise.inputs["Scale"].default_value = 5.0
+                ramp.color_ramp.elements[0].position = 0.25
+                ramp.color_ramp.elements[0].color = (0.20, 0.09, 0.035, 1.0)
+                ramp.color_ramp.elements[1].position = 0.78
+                ramp.color_ramp.elements[1].color = (0.58, 0.34, 0.15, 1.0)
+                bump.inputs["Strength"].default_value = 0.10
+                bump.inputs["Distance"].default_value = 0.015
+            elif name == "AI_Coffee_Table_Oak":
+                # Natural oak wood grain
+                mapping.inputs["Scale"].default_value = (2.0, 2.0, 18.0)
+                noise.inputs["Scale"].default_value = 3.0
+                noise.inputs["Detail"].default_value = 3.0
+                noise.inputs["Roughness"].default_value = 0.7
+
+                ramp.color_ramp.elements[0].position = 0.22
+                ramp.color_ramp.elements[0].color = (
+                    0.28, 0.16, 0.07, 1.0
+                )
+
+                ramp.color_ramp.elements[1].position = 0.78
+                ramp.color_ramp.elements[1].color = (
+                    0.62, 0.40, 0.22, 1.0
+                )
+
+                bump.inputs["Strength"].default_value = 0.08
+                bump.inputs["Distance"].default_value = 0.012
+
+                principled.inputs["Roughness"].default_value = 0.65
+            elif name == "Kitchen_Wood_Accent":
+                # Elongated kitchen wood grain
                 mapping.inputs["Scale"].default_value = (2.0, 2.0, 18.0)
                 noise.inputs["Scale"].default_value = 3.0
                 ramp.color_ramp.elements[0].position = 0.22
@@ -268,7 +327,17 @@ def create_material(
                 ramp.color_ramp.elements[1].color = (0.48, 0.24, 0.10, 1.0)
                 bump.inputs["Strength"].default_value = 0.12
                 bump.inputs["Distance"].default_value = 0.025
-            else:
+
+            elif name == "Kitchen_Black_Countertop":
+                # Subtle dark stone variation
+                mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                noise.inputs["Scale"].default_value = 28.0
+                ramp.color_ramp.elements[0].position = 0.25
+                ramp.color_ramp.elements[0].color = (0.012, 0.012, 0.012, 1.0)
+                ramp.color_ramp.elements[1].position = 0.78
+                ramp.color_ramp.elements[1].color = (0.055, 0.055, 0.055, 1.0)
+                bump.inputs["Strength"].default_value = 0.07
+                bump.inputs["Distance"].default_value = 0.008
                 # Fine, low-contrast variation for a dark stone-like surface.
                 mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
                 noise.inputs["Scale"].default_value = 28.0
@@ -278,12 +347,56 @@ def create_material(
                 ramp.color_ramp.elements[1].color = (0.055, 0.055, 0.055, 1.0)
                 bump.inputs["Strength"].default_value = 0.07
                 bump.inputs["Distance"].default_value = 0.008
+            elif name == "AI_Wall":
+                # Very subtle painted-plaster surface texture
+                mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                noise.inputs["Scale"].default_value = 220.0
+                noise.inputs["Detail"].default_value = 2.0
+                noise.inputs["Roughness"].default_value = 0.7
+
+                bump.inputs["Strength"].default_value = 0.07
+                bump.inputs["Distance"].default_value = 0.001
+            elif name == "AI_Chair":
+                # Subtle fine surface texture for the dark-grey chair
+                mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                noise.inputs["Scale"].default_value = 160.0
+                noise.inputs["Detail"].default_value = 2.0
+                noise.inputs["Roughness"].default_value = 0.7
+
+                bump.inputs["Strength"].default_value = 0.10
+                bump.inputs["Distance"].default_value = 0.002
+            elif name == "AI_Sofa":
+                # Subtle woven fabric texture for the red sofa
+                mapping.inputs["Scale"].default_value = (1.0, 1.0, 1.0)
+                noise.inputs["Scale"].default_value = 180.0
+                noise.inputs["Detail"].default_value = 2.0
+                noise.inputs["Roughness"].default_value = 0.7
+
+                ramp.color_ramp.elements[0].position = 0.25
+                ramp.color_ramp.elements[0].color = (
+                    0.65, 0.65, 0.65, 1.0
+                )
+
+                ramp.color_ramp.elements[1].position = 0.75
+                ramp.color_ramp.elements[1].color = (
+                    1.0, 1.0, 1.0, 1.0
+                )
+
+                bump.inputs["Strength"].default_value = 0.16
+                bump.inputs["Distance"].default_value = 0.005
+
+                principled.inputs["Roughness"].default_value = 0.82
 
             links.new(mapping.outputs["Vector"], noise.inputs["Vector"])
             links.new(noise.outputs["Fac"], ramp.inputs["Fac"])
-            links.new(ramp.outputs["Color"], principled.inputs["Base Color"])
+
+            if name not in ("AI_Sofa", "AI_Floor","AI_Chair","AI_Wall"):
+                links.new(ramp.outputs["Color"], principled.inputs["Base Color"])
+
             links.new(noise.outputs["Fac"], bump.inputs["Height"])
             links.new(bump.outputs["Normal"], principled.inputs["Normal"])
+
+
 
     return material
 
@@ -327,9 +440,18 @@ sofa_material = create_material(
     "AI_Sofa",
     materials_data.get(
         "sofa",
-        "#C8B39A"
+        "#B8202F"
     ),
     0.9
+)
+chair_material = create_material(
+    "AI_Chair",
+
+    materials_data.get(
+        "chair",
+      "#C62828"
+    ),
+    1.0
 )
 
 
@@ -340,6 +462,11 @@ wood_material = create_material(
         "#6B4226"
     ),
     0.45
+)
+coffee_table_material = create_material(
+    "AI_Coffee_Table_Oak",
+    "#A98255",
+    0.65
 )
 
 
@@ -528,10 +655,10 @@ create_box(
 print("Room created.")
 
 # =========================================================
-# OPEN ROOM VIEW — KEEP FLOOR AND THREE WALLS
+# OPEN ROOM VIEW â€” KEEP FLOOR AND THREE WALLS
 # =========================================================
 # =========================================================
-# OPEN ROOM VIEW — CAMERA-FRIENDLY RENDER
+# OPEN ROOM VIEW â€” CAMERA-FRIENDLY RENDER
 # =========================================================
 
 # Remove the ceiling for an open interior view.
@@ -1291,6 +1418,7 @@ def position_asset(
 loaded_assets = []
 
 asset_roots = []
+asset_roots_names = []
 
 expected_assets = []
 
@@ -1337,6 +1465,7 @@ for asset_data in scene_data["assets"]:
     asset_roots.append(
         root
     )
+    asset_roots_names.append(asset_name)
 
 
 # =========================================================
@@ -1404,51 +1533,210 @@ print("Furniture verification PASSED.")
 # =========================================================
 
 print("")
-print("Applying JSON materials...")
+print("Applying JSON materials by asset identity...")
 
 
-for obj in bpy.context.scene.objects:
+for root in asset_roots:
 
-    name = obj.name.lower()
+    # Read the asset name from the saved Python-side
+    # list, not from a potentially deleted Blender object.
+    asset_name = asset_roots_names[asset_roots.index(root)].lower()
 
-    if "sofa" in name:
+    if root.name not in bpy.data.objects:
+        print(f"Skipping removed controller: {asset_name}")
+        continue
 
-        assign_material(
-            obj,
-            sofa_material
+    if "sofa" in asset_name:
+        material = sofa_material
+
+    elif "chair" in asset_name:
+        material = chair_material
+
+    elif "coffee" in asset_name and "table" in asset_name:
+        material = coffee_table_material
+
+    elif any(
+        keyword in asset_name
+        for keyword in (
+            "table",
+            "tvunit",
+            "wood",
+            "desk",
+            "wardrobe",
+            "bed",
         )
-
-    elif (
-        "table" in name
-        or "tvunit" in name
-        or "wood" in name
-        or "desk" in name
-        or "wardrobe" in name
-        or "bed" in name
     ):
+        material = wood_material
 
-        assign_material(
-            obj,
-            wood_material
+
+
+    elif "tv" in asset_name or "black" in asset_name:
+        material = black_material
+
+    else:
+        continue
+
+
+    assigned_count = 0
+
+    for obj in root.children_recursive:
+
+        if obj.type != "MESH":
+            continue
+
+        object_name = obj.name.lower().split(".")[0]
+
+        # Keep the television screen black.
+        if object_name == "tv":
+            object_material = black_material
+
+        # Keep the TV stand black.
+        elif object_name == "tv_stand":
+            object_material = black_material
+
+        # Keep the wooden TV cabinet and other furniture wood.
+        else:
+            object_material = material
+
+        assign_material(obj, object_material)
+        assigned_count += 1
+        if object_name == "coffee_table_top":
+            print(
+                "ACTUAL TABLETOP MATERIAL:",
+                obj.data.materials[0].name
+            )
+            print(
+                "ACTUAL TABLETOP COLOR:",
+                tuple(
+                    round(v, 3)
+                    for v in obj.data.materials[0]
+                    .node_tree.nodes["Principled BSDF"]
+                    .inputs["Base Color"].default_value[:3]
+                )
+            )
+
+
+    print(
+        f"Asset: {root.name} | "
+        f"Material: {material.name} | "
+        f"Meshes updated: {assigned_count}"
+    )
+    if "sofa" in asset_name:
+        print(
+            "SOFA MATERIAL COLOR:",
+            tuple(
+                round(v, 3)
+                for v in sofa_material.node_tree.nodes["Principled BSDF"]
+                         .inputs["Base Color"].default_value[:3]
+            )
         )
 
-    elif (
-        "tv" in name
-        or "black" in name
-    ):
-
-        assign_material(
-            obj,
-            black_material
+    elif "chair" in asset_name:
+        print(
+            "CHAIR ROUGHNESS:",
+            chair_material.node_tree.nodes["Principled BSDF"]
+            .inputs["Roughness"].default_value
+        )
+        print(
+            "CHAIR MATERIAL COLOR:",
+            tuple(
+                round(v, 3)
+                for v in chair_material.node_tree.nodes["Principled BSDF"]
+                .inputs["Base Color"].default_value[:3]
+            )
         )
 
+    elif "coffee" in asset_name and "table" in asset_name:
+        print(
+            "COFFEE TABLE MATERIAL COLOR:",
+            tuple(
+                round(v, 3)
+                for v in coffee_table_material.node_tree
+                .nodes["Principled BSDF"]
+                .inputs["Base Color"].default_value[:3]
+            )
+        )
+# =========================================================
+# CREATE TV SCREEN PANEL - FIXED GEOMETRY
+# =========================================================
 
-# =========================================================
-# LIGHTING
-# =========================================================
+tv_root = bpy.data.objects.get("ASSET_INSTANCE_TVUnit_Wood")
+
+if tv_root:
+    tv_obj = next(
+        (
+            obj for obj in tv_root.children_recursive
+            if obj.name.lower().split(".")[0] == "tv"
+            and obj.type == "MESH"
+        ),
+        None
+    )
+
+    if tv_obj:
+        # Remove the previous incorrect screen panel.
+        old_screen = bpy.data.objects.get("AI_TV_Screen_Panel")
+        if old_screen:
+            bpy.data.objects.remove(old_screen, do_unlink=True)
+
+        tv_screen_material = create_material(
+            "AI_TV_Screen",
+            "#05070A",
+            roughness=0.12
+        )
+
+        # Build a thin rectangular screen directly in TV-local space.
+        x = 1.05
+        z = 0.575
+        y_front = -0.043
+        y_back = -0.041
+
+        vertices = [
+            (-x, y_front, -z),
+            ( x, y_front, -z),
+            ( x, y_back, -z),
+            (-x, y_back, -z),
+            (-x, y_front,  z),
+            ( x, y_front,  z),
+            ( x, y_back,  z),
+            (-x, y_back,  z),
+        ]
+
+        faces = [
+            (0, 1, 5, 4),
+            (1, 2, 6, 5),
+            (2, 3, 7, 6),
+            (3, 0, 4, 7),
+            (4, 5, 6, 7),
+            (3, 2, 1, 0),
+        ]
+
+        mesh = bpy.data.meshes.new("AI_TV_Screen_Mesh")
+        mesh.from_pydata(vertices, [], faces)
+        mesh.materials.append(tv_screen_material)
+        mesh.update()
+
+        screen = bpy.data.objects.new(
+            "AI_TV_Screen_Panel",
+            mesh
+        )
+
+        bpy.context.collection.objects.link(screen)
+
+        # Parent directly to the TV mesh.
+        screen.parent = tv_obj
+        screen.location = (0, 0, 0)
+        screen.rotation_euler = (0, 0, 0)
+        screen.scale = (1, 1, 1)
+
+        print("TV SCREEN CREATED WITH FIXED RECTANGULAR GEOMETRY")
+        print("TV SCREEN DIMENSIONS:", tuple(round(v, 3) for v in screen.dimensions))
+
+    else:
+        print("WARNING: TV mesh not found")
+else:
+    print("WARNING: TV controller not found")
 
 print("")
-print("[6/9] Creating lighting...")
 
 
 lighting_data = scene_data.get(
@@ -1482,7 +1770,7 @@ def create_area_light(
     )
 
     light_data.energy = (
-        energy * brightness * 1.5
+            energy * brightness
     )
 
     light_data.shape = "DISK"
@@ -1500,8 +1788,12 @@ def create_area_light(
 
     obj.location = location
 
-    return obj
+    # Aim the area light towards the centre of the room
+    target = Vector((0.0, 0.0, 1.0))
+    direction = target - obj.location
+    obj.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
 
+    return obj
 
 
 
@@ -1510,27 +1802,27 @@ def create_area_light(
 # =========================================================
 
 
-# Key light — soft white illumination
+# Key light â€” soft white illumination
 create_area_light(
     "AI_Key_Light",
     (0, -2.0, HEIGHT - 0.2),
-    800,
+    500,
     4
 )
 
-# Fill light — gentle illumination on the left
+# Fill light â€” gentle illumination on the left
 create_area_light(
     "AI_Fill_Light",
     (-2.0, -0.2, 2.2),
-    250,
+    150,
     3
 )
 
-# Ceiling light — balanced illumination
+# Ceiling light â€” balanced illumination
 create_area_light(
     "AI_Ceiling_Light",
     (0, 0.5, HEIGHT - 0.15),
-    500,
+    300,
     3
 )
 
@@ -1540,7 +1832,7 @@ warm_data = bpy.data.lights.new(
     type="POINT"
 )
 
-warm_data.energy = 100 * brightness * 1.5
+warm_data.energy = 40 * brightness
 warm_data.color = (1.0, 1.0, 1.0)
 
 warm_light = bpy.data.objects.new(
@@ -1738,7 +2030,7 @@ scene.render.resolution_percentage = 100
 # Color management for a more balanced architectural render
 scene.view_settings.view_transform = "AgX"
 scene.view_settings.look = "AgX - Medium High Contrast"
-scene.view_settings.exposure = 0.3
+scene.view_settings.exposure = 0.0
 scene.view_settings.gamma = 1.0
 
 # Save as PNG
@@ -1751,16 +2043,22 @@ scene.render.film_transparent = False
 # OUTPUT PATHS
 # =========================================================
 
-blend_path = os.path.join(
-    PROJECTS_DIR,
-    "AI_Interior_Final.blend"
+blend_path = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_BLEND_FILE",
+        os.path.join(PROJECTS_DIR, "AI_Interior_Final.blend")
+    )
 )
 
-render_path = os.path.join(
-    RENDERS_DIR,
-    "AI_Interior_Final.png"
+render_path = os.path.abspath(
+    os.environ.get(
+        "AI_STUDIO_RENDER_FILE",
+        os.path.join(RENDERS_DIR, "AI_Interior_Final.png")
+    )
 )
 
+os.makedirs(os.path.dirname(blend_path), exist_ok=True)
+os.makedirs(os.path.dirname(render_path), exist_ok=True)
 
 # =========================================================
 # FINAL TRANSFORM VERIFICATION

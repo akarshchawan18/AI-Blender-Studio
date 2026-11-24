@@ -35,6 +35,8 @@ COLOR_MAP = {
     "blue": "#4169A1",
     "green": "#4F6F52",
     "red": "#8B3A3A",
+    "deep teal": "#0E6259",
+    "teal": "#0E6259",
 }
 
 
